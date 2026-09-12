@@ -20,6 +20,14 @@ const CountsPerIndex = 16
 // SiderealDay is the sidereal day in seconds, for the tooth-count check.
 const SiderealDay = 86164.0905
 
+// Interval is a stretch of the capture.
+type Interval struct{ From, To time.Time }
+
+// pecLoud is the per-minute encoder residual RMS, in counts, above which
+// a minute counts as PEC-on. The table gives about 5 counts RMS; a steady
+// drive gives well under 1.
+const pecLoud = 2.0
+
 // Options for Analyse.
 type Options struct {
 	Entries int     // PEC table entries (1250)
@@ -40,6 +48,21 @@ type Result struct {
 	TrackTo       time.Time
 
 	EncoderReadings int
+	// QuietReadings is how many of them were outside PEC-on stretches and
+	// went into the rate fit.
+	QuietReadings int
+	// PECOn lists the stretches where the encoder carried a periodic
+	// wobble: Apply PEC ticked in the TCS. While the table is played back
+	// the encoder register reads minus the table, so the rate is fitted on
+	// the readings outside these stretches.
+	PECOn []Interval
+	// Fold is the PEC-on encoder residual folded by PEC index into
+	// FoldBins bins (counts, mean removed), nil without PEC-on readings.
+	// One count is one table tick, so -Fold is the correction the mount
+	// applied, in the mount's own index phase.
+	Fold            []float64
+	FoldN           []int
+	FoldBins        int
 	EncoderRate     float64 // counts/s
 	EncoderRateSig  float64
 	EncoderRMS      float64 // fit residual, counts
@@ -188,6 +211,65 @@ func Analyse(c *Capture, o Options) (*Result, error) {
 		enc = kept
 	}
 	r.EncoderReadings = len(enc)
+
+	// Apply PEC shows up in the encoder as a 150 s sawtooth of about
+	// +-10 counts. Bucket the residuals by minute: loud minutes are PEC-on
+	// stretches, and the rate is refitted on the quiet ones.
+	loud := map[int]bool{}
+	{
+		type acc struct {
+			ss float64
+			n  int
+		}
+		buckets := map[int]*acc{}
+		for _, e := range enc {
+			t := e.At.Sub(r.fitT0).Seconds()
+			res := float64(e.Value) - (a0 + rate*t)
+			b := int(t / 60)
+			if buckets[b] == nil {
+				buckets[b] = &acc{}
+			}
+			buckets[b].ss += res * res
+			buckets[b].n++
+		}
+		var keys []int
+		for b, a := range buckets {
+			if a.n >= 10 && math.Sqrt(a.ss/float64(a.n)) > pecLoud {
+				loud[b] = true
+				keys = append(keys, b)
+			}
+		}
+		sort.Ints(keys)
+		for i := 0; i < len(keys); {
+			j := i
+			for j+1 < len(keys) && keys[j+1] == keys[j]+1 {
+				j++
+			}
+			to := r.fitT0.Add(time.Duration(keys[j]+1) * time.Minute)
+			if to.After(bestTo) {
+				to = bestTo
+			}
+			r.PECOn = append(r.PECOn, Interval{From: r.fitT0.Add(time.Duration(keys[i]) * time.Minute), To: to})
+			i = j + 1
+		}
+	}
+	var quiet, on []Reading
+	for _, e := range enc {
+		if loud[int(e.At.Sub(r.fitT0).Seconds()/60)] {
+			on = append(on, e)
+		} else {
+			quiet = append(quiet, e)
+		}
+	}
+	r.QuietReadings = len(quiet)
+	if len(on) > 0 {
+		if len(quiet) >= 200 {
+			a0, rate, sig, rms = fit(quiet)
+			r.Notes = append(r.Notes, fmt.Sprintf("Apply PEC was on for %.0f s of the capture (the encoder carries the table while it plays back); the rate is fitted on the %d readings outside those stretches", pecOnSeconds(r.PECOn), len(quiet)))
+		} else {
+			r.warn("warn", "Apply PEC was on for the whole capture: the rate is averaged over the correction and the encoder scatter is the table, not the drive")
+		}
+	}
 	r.fitA0, r.EncoderRate, r.EncoderRateSig, r.EncoderRMS = a0, rate, sig, rms
 	if rate <= 0 {
 		return r, fmt.Errorf("the HA encoder is not advancing (%.2f counts/s); was the mount tracking?", rate)
@@ -204,14 +286,22 @@ func Analyse(c *Capture, o Options) (*Result, error) {
 
 	// Index readings against the encoder line.
 	n := float64(o.Entries)
+	// PEC-on readings are skipped when quiet ones exist: the encoder is
+	// off by the table there, so they would widen the spread for nothing.
 	var devs []float64
-	for _, ix := range c.Index() {
-		if ix.At.Before(from) || ix.At.After(bestTo) {
-			continue
+	skipLoud := len(on) > 0 && len(quiet) >= 200
+	for pass := 0; pass < 2 && len(devs) == 0; pass++ {
+		for _, ix := range c.Index() {
+			if ix.At.Before(from) || ix.At.After(bestTo) {
+				continue
+			}
+			if pass == 0 && skipLoud && loud[int(ix.At.Sub(r.fitT0).Seconds()/60)] {
+				continue
+			}
+			pred := math.Mod(r.EncoderAt(ix.At)/CountsPerIndex, n)
+			d := math.Mod(float64(ix.Value)-pred+1.5*n, n) - n/2
+			devs = append(devs, d)
 		}
-		pred := math.Mod(r.EncoderAt(ix.At)/CountsPerIndex, n)
-		d := math.Mod(float64(ix.Value)-pred+1.5*n, n) - n/2
-		devs = append(devs, d)
 	}
 	r.IndexReadings = len(devs)
 	if len(devs) == 0 {
@@ -232,6 +322,37 @@ func Analyse(c *Capture, o Options) (*Result, error) {
 		r.warn("warn", fmt.Sprintf("only %d index readings; the anchor rests on few samples", len(devs)))
 	}
 
+	// Fold the PEC-on residual by index: minus this is the correction the
+	// mount applied, in the mount's own index phase.
+	if len(on) >= 300 {
+		const bins = 125
+		r.FoldBins = bins
+		r.Fold = make([]float64, bins)
+		r.FoldN = make([]int, bins)
+		for _, e := range on {
+			b := int(math.Mod(r.IndexAt(e.At)+n, n)/n*bins) % bins
+			r.Fold[b] += float64(e.Value) - r.EncoderAt(e.At)
+			r.FoldN[b]++
+		}
+		var mean float64
+		var filled int
+		for i := range r.Fold {
+			if r.FoldN[i] > 0 {
+				r.Fold[i] /= float64(r.FoldN[i])
+				mean += r.Fold[i]
+				filled++
+			}
+		}
+		if filled > 0 {
+			mean /= float64(filled)
+		}
+		for i := range r.Fold {
+			if r.FoldN[i] > 0 {
+				r.Fold[i] -= mean
+			}
+		}
+	}
+
 	// Anchor at the last index reading, moved to the instant the relation
 	// gives a whole index step.
 	at := c.Index()[len(c.Index())-1].At
@@ -246,6 +367,14 @@ func Analyse(c *Capture, o Options) (*Result, error) {
 	r.HasAnchor = true
 	r.AnchorSigma = math.Max(0.05, math.Hypot(r.IndexSpread*CountsPerIndex/rate, rms/rate))
 	return r, nil
+}
+
+func pecOnSeconds(iv []Interval) float64 {
+	var s float64
+	for _, i := range iv {
+		s += i.To.Sub(i.From).Seconds()
+	}
+	return s
 }
 
 func statusWords(ch []Reading) string {

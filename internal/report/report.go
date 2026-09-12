@@ -766,7 +766,7 @@ func onOff(b bool) string {
 
 // BuildCapture describes a decoded USB capture: the worm period from the
 // encoder rate and the PEC index anchor.
-func BuildCapture(c *mks.Capture, r *mks.Result, sourceName string, loc *time.Location) ReportData {
+func BuildCapture(c *mks.Capture, r *mks.Result, sourceName string, loc *time.Location, stored *tcs.Table) ReportData {
 	d := ReportData{Kind: KindCapture, Title: "USB capture · " + sourceName,
 		Subtitle: fmt.Sprintf("%s to %s", r.Start.In(loc).Format("2006-01-02 15:04:05"), r.End.In(loc).Format("15:04:05")),
 		Warnings: r.Warnings}
@@ -806,6 +806,22 @@ func BuildCapture(c *mks.Capture, r *mks.Result, sourceName string, loc *time.Lo
 	d.Stats = append(d.Stats,
 		Stat{"Tracking", track, fmt.Sprintf("status changes: %s", statusList(r.StatusChanges))},
 		Stat{"Capture", fmt.Sprintf("%.0f s", r.Span), fmt.Sprintf("%d frames · %d junk bytes · %d unpaired", r.Frames, r.Junk, r.Unpaired)})
+	if len(r.PECOn) > 0 {
+		v := fmt.Sprintf("%s to %s", ts(r.PECOn[0].From), ts(r.PECOn[0].To))
+		if len(r.PECOn) > 1 {
+			v += fmt.Sprintf(" +%d more", len(r.PECOn)-1)
+		}
+		d.Stats = append(d.Stats, Stat{"Apply PEC seen", v, fmt.Sprintf("the encoder carries the table while PEC plays back · rate from %d quiet readings", r.QuietReadings)})
+	}
+	if ch, line, level := pecFoldChart(r, stored); ch.SVG != "" {
+		d.Charts = append(d.Charts, ch)
+		if line != "" {
+			d.Verdict.Detail += " " + line
+			if level == "warn" && d.Verdict.Level == "good" {
+				d.Verdict.Level = "warn"
+			}
+		}
+	}
 
 	// Encoder residual chart with status changes marked.
 	var pts []XY
@@ -866,6 +882,67 @@ func BuildCapture(c *mks.Capture, r *mks.Result, sourceName string, loc *time.Lo
 	}
 	d.Notes = append(r.Notes, "The 16-counts-per-step relation and the tracking status bit were inferred from one capture on 2026-09-12; a capture with the PEC tab showing throughout confirms them. Nothing was sent to the mount: this is a passive USB capture.")
 	return d
+}
+
+// pecFoldChart draws the correction the mount applied, read off the
+// encoder while Apply PEC was on, over the stored table when one is known.
+// The encoder reads minus the table, so the fold is negated. A match says
+// the fold's index (from the anchor relation) is the mount's own index and
+// fixes the sign of "table" against "encoder motion" without any PHD2
+// convention involved.
+func pecFoldChart(r *mks.Result, stored *tcs.Table) (Chart, string, string) {
+	if r.Fold == nil || r.FoldBins == 0 {
+		return Chart{}, "", ""
+	}
+	nb := r.FoldBins
+	step := r.CountsPerTurn / mks.CountsPerIndex / float64(nb)
+	applied := make([]float64, nb)
+	var pts []XY
+	for i := range r.Fold {
+		applied[i] = -r.Fold[i]
+		if r.FoldN[i] > 0 {
+			pts = append(pts, XY{(float64(i) + 0.5) * step, applied[i]})
+		}
+	}
+	series := []Series{{Label: "applied", Color: colMeasured, Pts: pts, Always: true}}
+	legend := []LegendItem{{"correction seen in the encoder", colMeasured}}
+	line, level := "", ""
+	ca := pe.DFT(applied, 3)
+	ha := ca.Fundamental()
+	note := fmt.Sprintf("Minus the encoder residual while Apply PEC was on, folded by PEC index into %d bins. One count is one tick. Fundamental %.2f ticks at %.1f° from index 0.", nb, ha.Amp, ha.PhaseDeg)
+	if stored != nil && len(stored.Values) > 0 {
+		per := len(stored.Values) / nb
+		binned := make([]float64, nb)
+		var spts []XY
+		for i := 0; i < nb; i++ {
+			var s float64
+			for j := 0; j < per; j++ {
+				s += float64(stored.Values[i*per+j])
+			}
+			binned[i] = s / float64(per)
+			spts = append(spts, XY{(float64(i) + 0.5) * step, binned[i]})
+		}
+		series = append(series, Series{Label: "stored", Color: colFitted, Pts: spts, Thin: true})
+		legend = append(legend, LegendItem{"stored table", colFitted})
+		hs := pe.DFT(binned, 3).Fundamental()
+		diff := math.Mod(ha.PhaseDeg-hs.PhaseDeg+540, 360) - 180
+		note += fmt.Sprintf(" Stored table fundamental %.2f ticks at %.1f°: %.1f° apart.", hs.Amp, hs.PhaseDeg, diff)
+		if math.Abs(ha.Amp-hs.Amp) < 1 && math.Abs(diff) < 10 {
+			line = fmt.Sprintf("The encoder shows the mount applying its stored table (fundamental %.2f vs %.2f ticks, %.0f° apart), so the index the fold uses is the index the mount uses.", ha.Amp, hs.Amp, math.Abs(diff))
+		} else {
+			line = fmt.Sprintf("The correction seen in the encoder does not match the stored table (fundamental %.2f vs %.2f ticks, %.0f° apart): either the table changed since it was copied or the index relation is off.", ha.Amp, hs.Amp, math.Abs(diff))
+			level = "warn"
+		}
+	} else {
+		note += " Upload the current TCS table on the TCS table page to overlay it."
+	}
+	svg := RenderXY(series, Axes{
+		H: 240, XMin: 0, XMax: r.CountsPerTurn / mks.CountsPerIndex, XTicks: 5, YTicks: 4, ZeroLine: true, NoDirectLabs: true,
+		YLabel: "correction, ticks", XLabel: "PEC index",
+		XFmt: func(v float64) string { return fmt.Sprintf("%.0f", v) },
+		YFmt: func(v float64) string { return fmt.Sprintf("%.0f", v) },
+	})
+	return Chart{Title: "Correction seen in the encoder while PEC was on", Note: note, Legend: legend, SVG: template.HTML(svg)}, line, level
 }
 
 func statusList(ch []mks.Reading) string {

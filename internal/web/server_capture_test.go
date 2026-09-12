@@ -11,6 +11,7 @@ import (
 
 	"github.com/exploded/pec/internal/analysis"
 	"github.com/exploded/pec/internal/mks"
+	"github.com/exploded/pec/internal/tcs"
 )
 
 func TestCaptureFlow(t *testing.T) {
@@ -77,5 +78,31 @@ func TestCaptureFlow(t *testing.T) {
 	_, page = get(t, ts, "/anchor")
 	if !strings.Contains(page, "first capture") {
 		t.Error("anchor should survive capture deletion")
+	}
+}
+
+// A capture with Apply PEC on for its second half shows the correction
+// read off the encoder, overlaid on the most recent stored table.
+func TestCapturePECFold(t *testing.T) {
+	ts := newTestServer(t)
+	upload(t, ts, "/table", "table", "../../testdata/PEC_table_TCS_2026-09-12.txt", nil)
+	tab, err := tcs.ReadFile("../../testdata/PEC_table_TCS_2026-09-12.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Date(2026, 9, 12, 9, 0, 0, 0, time.UTC)
+	data := mks.Synth(mks.SynthOptions{Start: start, Duration: 1000, Rate: 133.698, Encoder0: 40000, IndexOffset: 72.7, WithIndex: true, PECTable: tab.Values, PECFrom: 420})
+	path := filepath.Join(t.TempDir(), "pec.pcapng")
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	resp, body := upload(t, ts, "/capture", "capture", path, nil)
+	if resp.StatusCode != 200 {
+		t.Fatalf("decode: %d %s", resp.StatusCode, body)
+	}
+	for _, want := range []string{"Apply PEC seen", "Correction seen in the encoder while PEC was on", "applying its stored table", "stored table"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("result lacks %q", want)
+		}
 	}
 }

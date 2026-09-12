@@ -19,6 +19,7 @@ import (
 	"github.com/exploded/pec/internal/report"
 	"github.com/exploded/pec/internal/store"
 	"github.com/exploded/pec/internal/store/db"
+	"github.com/exploded/pec/internal/tcs"
 )
 
 // maxCapture caps USB capture uploads. Ten minutes of the mount link is
@@ -100,7 +101,7 @@ func (s *Server) captureUpload(w http.ResponseWriter, r *http.Request) {
 		s.problem(w, r, "capture", base, err.Error())
 		return
 	}
-	d := report.BuildCapture(c, res, name, s.opt.Loc)
+	d := report.BuildCapture(c, res, name, s.opt.Loc, s.latestTable(r.Context()))
 	body, err := report.Body(d)
 	if err != nil {
 		s.fail(w, err)
@@ -191,4 +192,18 @@ func (s *Server) saveUploadStream(r *http.Request, field, kind string, limit int
 		return "", "", err
 	}
 	return sha, name, nil
+}
+
+// latestTable is the most recently uploaded TCS table, for the Capture
+// page to overlay on the correction seen in the encoder; nil if none.
+func (s *Server) latestTable(ctx context.Context) *tcs.Table {
+	rows, err := s.st.Q.ListTableRuns(ctx, 1)
+	if err != nil || len(rows) == 0 || !validSHA(rows[0].FileSha256) {
+		return nil
+	}
+	t, err := tcs.ReadFile(s.filePath(rows[0].FileSha256))
+	if err != nil {
+		return nil
+	}
+	return t
 }

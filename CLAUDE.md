@@ -97,7 +97,11 @@ share the seq byte. Commands: 3 status word (0x1200 tracking, 0x0300 slewing, 0x
 read u16 register, 210 read i32 register, 211 write i32. Axis 0 registers: 4 "Current Position",
 10 "Current Encoder" (133.5 counts/s tracking = 16 counts per PEC index step, 20,000 per worm
 turn), 16-bit 9 = PEC index (polled only while the TCS PEC tab is showing). The USB adapter
-fragments replies into 1-3 byte packets, so the splitter reassembles. `mks.Synth` builds a
+fragments replies into 1-3 byte packets, so the splitter reassembles. **Apply PEC is visible in the
+encoder**: while the table plays back the encoder register reads minus the table (one count = one
+tick), confirmed 2026-09-12 (fold amplitude 6.06 vs table 6.07 ticks, 180 degrees apart). `Analyse`
+finds those minutes by residual RMS (`pecLoud`), fits the rate on the quiet ones, and folds the
+PEC-on residual by index (`Result.Fold`); the report overlays it on the latest stored table. `mks.Synth` builds a
 synthetic capture for tests; the real capture lives in `.local/cpature.pcapng` (gitignored) and
 `TestRealCapture` uses it when present. pec never sends a frame: the encoder exists for tests only.
 

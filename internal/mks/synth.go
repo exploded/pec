@@ -19,6 +19,10 @@ type SynthOptions struct {
 	Encoder0    int64
 	IndexOffset float64
 	WithIndex   bool
+	// PECTable, when set, is subtracted from the encoder reading at the
+	// current index from PECFrom seconds on: what Apply PEC does.
+	PECTable []int
+	PECFrom  float64
 }
 
 // Synth returns a pcapng file for the options.
@@ -29,6 +33,16 @@ func Synth(o SynthOptions) []byte {
 			return float64(o.Encoder0) - 5000 + 250*t
 		}
 		return float64(o.Encoder0) + o.Rate*(t-20)
+	}
+	index := func(t float64) int {
+		return int(math.Floor(math.Mod(enc(t)/CountsPerIndex+o.IndexOffset, 1250)))
+	}
+	encRead := func(t float64) float64 {
+		v := enc(t)
+		if o.PECTable != nil && t >= o.PECFrom && t >= 20 {
+			v -= float64(o.PECTable[index(t)%len(o.PECTable)])
+		}
+		return v
 	}
 	for t := 0.0; t < o.Duration; t += 0.05 {
 		at := o.Start.Add(time.Duration(t * float64(time.Second)))
@@ -41,12 +55,11 @@ func Synth(o SynthOptions) []byte {
 			s.exchange(at, 0, CmdStatus, nil, u16(st))
 		}
 		if step%6 == 1 {
-			s.exchange(at, 0, CmdRead32, u16(Reg32Encoder), i32(int64(math.Round(enc(t)))))
+			s.exchange(at, 0, CmdRead32, u16(Reg32Encoder), i32(int64(math.Round(encRead(t)))))
 			s.exchange(at.Add(20*time.Millisecond), 1, CmdRead32, u16(Reg32Encoder), i32(5))
 		}
 		if o.WithIndex && step%20 == 5 {
-			idx := math.Floor(math.Mod(enc(t)/CountsPerIndex+o.IndexOffset, 1250))
-			s.exchange(at, 0, CmdRead16, u16(Reg16Index), u16(int(idx)))
+			s.exchange(at, 0, CmdRead16, u16(Reg16Index), u16(index(t)))
 		}
 		if step%120 == 7 {
 			s.recs = append(s.recs, rec{at, false, encode(0, s.seq[0], CmdWrite32, append(u16(11), i32(-1)...))})
