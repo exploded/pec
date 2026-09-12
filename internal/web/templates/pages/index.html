@@ -1,0 +1,26 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>Periodic error, measured</h1>
+<p class="lede">Measure the RA periodic error of the mount from a PHD2 guide log, compare it with the
+PEC table stored in the Bisque TCS, and (later) fit a better table to paste in by hand.</p>
+
+<div class="cards">
+  <a class="card link" href="/analyse">
+    <h2>Analyse a guide log</h2>
+    <p>Upload a PHD2 guide log, pick a session, and get the worm period, the harmonic
+    breakdown, drift and residual. Best fed a Guiding Assistant run of three or more worm cycles.</p>
+  </a>
+  <a class="card link" href="/table">
+    <h2>Analyse a TCS table</h2>
+    <p>Upload the table copied out of the Bisque TCS window and see its harmonics in the same
+    units, so a stored curve and a fresh measurement compare directly.</p>
+  </a>
+  <div class="card muted">
+    <h2>Coming next</h2>
+    <p>Milestone 2 stores every run in a local database, draws the charts, and adds
+    <strong>Verify</strong> (PEC off vs on with a plain verdict). Milestone 3 adds
+    <strong>Fit</strong>, which writes a paste-ready table. Milestone 4 reads the PEC index off the
+    TCS window to sync the phase.</p>
+  </div>
+</div>
+{{end}}

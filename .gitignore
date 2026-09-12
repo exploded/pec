@@ -1,0 +1,8 @@
+.local/
+data/
+*.db
+*.db-*
+.env
+/pec.exe
+/pec
+/out/

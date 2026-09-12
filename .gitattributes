@@ -1,0 +1,3 @@
+# fixtures must round-trip byte for byte
+testdata/** -text
+*.bat text eol=crlf

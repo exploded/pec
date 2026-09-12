@@ -1,0 +1,9 @@
+{{define "nav"}}<header class="topbar">
+  <a class="brand" href="/">pec</a>
+  <nav>
+    <a href="/analyse" {{if eq .Nav "analyse"}}class="active"{{end}}>Analyse log</a>
+    <a href="/table" {{if eq .Nav "table"}}class="active"{{end}}>TCS table</a>
+    <span class="soon" title="Milestone 2">Verify</span>
+    <span class="soon" title="Milestone 3">Fit</span>
+  </nav>
+</header>{{end}}

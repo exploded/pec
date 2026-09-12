@@ -1,0 +1,61 @@
+{{define "analyse/_sessions"}}{{with .Data}}
+<form class="card" hx-post="/analyse" hx-target="#result" hx-swap="innerHTML show:#result:top"
+      hx-status:422="target:#run-error swap:innerHTML">
+  <input type="hidden" name="file" value="{{.FileSHA}}">
+  <input type="hidden" name="name" value="{{.FileName}}">
+  <h2>{{.FileName}} · {{len .Sessions}} session{{if ne (len .Sessions) 1}}s{{end}}</h2>
+  <div class="scroll">
+  <table class="sessions">
+    <thead><tr><th></th><th>#</th><th>Begins</th><th>Length</th><th>Rows</th><th>Cadence</th><th>RA / Dec</th><th>Alt</th><th>Pier</th><th>PHD2 state</th><th>Notes</th></tr></thead>
+    <tbody>
+    {{range $i, $s := .Sessions}}
+      <tr class="{{if $s.Guiding.IsGA}}ga{{end}} {{if not $s.Usable}}unusable{{end}}">
+        <td><input type="radio" name="session" value="{{$s.Index}}" {{if not $s.Usable}}disabled{{end}} {{if or $s.Guiding.IsGA (and (eq (len $.Data.Sessions) 1) $s.Usable)}}checked{{end}}></td>
+        <td>{{$s.Index}}</td>
+        <td class="mono">{{ts $s.Begins}}</td>
+        <td>{{dur $s.Duration}}</td>
+        <td>{{$s.Samples}}</td>
+        <td>{{f1 $s.Cadence}} s</td>
+        <td class="mono">{{f2 $s.RAHours}} h / {{f1 $s.DecDeg}}°</td>
+        <td>{{f1 $s.AltDeg}}°</td>
+        <td>{{$s.PierSide}}</td>
+        <td>{{$s.Note}}</td>
+        <td class="small">{{if $s.Dithers}}{{$s.Dithers}} dither{{if ne $s.Dithers 1}}s{{end}}{{end}}
+            {{if $s.Drops}} {{$s.Drops}} dropped{{end}}
+            {{if not $s.Usable}} too few usable rows{{end}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+
+  <details class="params" open>
+    <summary>Parameters</summary>
+    <div class="grid">
+      <label>Harmonics <input type="number" name="harmonics" value="{{.Params.Harmonics}}" min="1" max="12"></label>
+      <label>Period (s, 0 = scan) <input type="number" name="period" value="{{.Params.Period}}" step="0.01" min="0"></label>
+      <label>Scan from (s) <input type="number" name="scan_min" value="{{.Params.ScanMin}}" step="0.1"></label>
+      <label>Scan to (s) <input type="number" name="scan_max" value="{{.Params.ScanMax}}" step="0.1"></label>
+      <label>Scan step (s) <input type="number" name="scan_step" value="{{.Params.ScanStep}}" step="0.01" min="0.01"></label>
+      <label>Drift polynomial
+        <select name="poly">
+          <option value="1" {{if eq .Params.PolyOrder 1}}selected{{end}}>linear</option>
+          <option value="2" {{if eq .Params.PolyOrder 2}}selected{{end}}>quadratic</option>
+        </select>
+      </label>
+      <label>Exclude after dither (s) <input type="number" name="exclude" value="{{.Params.ExcludeAfter}}" step="1" min="0"></label>
+      <label>Min segment (samples) <input type="number" name="min_segment" value="{{.Params.MinSegment}}" min="3"></label>
+      <label>RA sign
+        <select name="ra_sign">
+          <option value="1" {{if eq .Params.RASign 1.0}}selected{{end}}>+1 (PHD2 as logged)</option>
+          <option value="-1" {{if eq .Params.RASign -1.0}}selected{{end}}>−1 (inverted)</option>
+        </select>
+      </label>
+    </div>
+  </details>
+  <div class="row">
+    <button type="submit" hx-disable="this">Analyse session</button>
+    <div id="run-error" class="slot inline"></div>
+  </div>
+</form>
+{{end}}{{end}}

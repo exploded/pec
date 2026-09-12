@@ -1,0 +1,25 @@
+{{define "table/_result"}}{{with .Data}}
+<section class="card result">
+  <h2>{{.FileName}} · {{.Res.Stats.Entries}} entries</h2>
+  <div class="tiles">
+    <div class="tile"><span class="k">Peak-to-peak</span><span class="v">{{.Res.Stats.P2P}} ticks</span>
+      <span class="s">{{f2 (arc .Res.Stats.P2P .Res.Config)}}″ · min {{.Res.Stats.Min}} / max {{.Res.Stats.Max}}</span></div>
+    <div class="tile"><span class="k">RMS</span><span class="v">{{f2 .Res.Stats.RMS}} ticks</span>
+      <span class="s">{{f2 (arcf .Res.Stats.RMS .Res.Config)}}″ about zero</span></div>
+    <div class="tile"><span class="k">Harmonic RMS</span><span class="v">{{f2 .Res.Curve.RMS}}″</span>
+      <span class="s">first {{.Res.Harmonics}} harmonics</span></div>
+    <div class="tile"><span class="k">Left over</span><span class="v">{{f3 .Res.ResidRMS}}″</span>
+      <span class="s">table minus its harmonics (noise, quantisation)</span></div>
+  </div>
+
+  <h3>Harmonics <span class="small">(phase relative to index 0; periods assume a {{f0 .NominalPeriod}} s worm)</span></h3>
+  <table class="numbers">
+    <thead><tr><th>k</th><th>Period</th><th>Amplitude</th><th>Ticks</th><th>Phase</th></tr></thead>
+    <tbody>
+    {{range .Rows}}
+      <tr><td>{{.K}}</td><td>{{f1 .PeriodS}} s</td><td>{{f3 .AmpArc}}″</td><td>{{f2 .AmpTicks}}</td><td>{{f1 .PhaseDeg}}°</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+</section>
+{{end}}{{end}}

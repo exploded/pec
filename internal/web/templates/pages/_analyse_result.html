@@ -1,0 +1,57 @@
+{{define "analyse/_result"}}{{with .Data.Result}}
+<section class="card result">
+  <h2>Session {{.Res.Session.Index}} · {{ts .Res.Session.Begins}} · {{.FileName}}</h2>
+
+  {{if .Warnings}}
+  <ul class="warnings">
+    {{range .Warnings}}<li>{{.}}</li>{{end}}
+  </ul>
+  {{end}}
+
+  <div class="tiles">
+    <div class="tile"><span class="k">Worm period</span><span class="v">{{.PeriodText}}</span>
+      {{if not .Res.Fit.PeriodFixed}}<span class="s">scan {{f0 .Res.Params.ScanMin}}–{{f0 .Res.Params.ScanMax}} s</span>{{end}}</div>
+    <div class="tile"><span class="k">PE peak-to-peak</span><span class="v">{{f2 .Res.Fit.PeakToPeak}}″</span>
+      <span class="s">{{f1 (ticks .Res.Fit.PeakToPeak .Cfg)}} ticks · fitted curve</span></div>
+    <div class="tile"><span class="k">Periodic RMS</span><span class="v">{{f2 .Res.Fit.ModelRMS}}″</span>
+      <span class="s">what an ideal PEC removes</span></div>
+    <div class="tile"><span class="k">Residual RMS</span><span class="v">{{f2 .Res.Fit.ResidualRMS}}″</span>
+      <span class="s">left after the curve · p2p {{f2 .Res.Fit.ResidualP2P}}″</span></div>
+    <div class="tile"><span class="k">Drift</span><span class="v">{{.Drift}}</span>
+      <span class="s">polar alignment / refraction</span></div>
+    <div class="tile"><span class="k">Run</span><span class="v">{{f1 .Res.Fit.Cycles}} cycles</span>
+      <span class="s">{{.Res.Fit.N}} samples in {{.Segments}} segment{{if ne .Segments 1}}s{{end}}{{if .Res.Fit.Dropped}}, {{.Res.Fit.Dropped}} excluded{{end}} · cadence {{f1 .Res.Fit.Cadence.Median}} s</span></div>
+  </div>
+
+  <h3>Harmonics <span class="small">(phase relative to session start; {{.Res.Fit.HarmonicsUsed}} fitted)</span></h3>
+  <table class="numbers">
+    <thead><tr><th>k</th><th>Period</th><th>Amplitude</th><th>Ticks</th><th>Phase</th><th>± amplitude</th></tr></thead>
+    <tbody>
+    {{range .Harmonics}}
+      <tr><td>{{.K}}</td><td>{{f1 .PeriodS}} s</td><td>{{f3 .AmpArc}}″</td><td>{{f2 .AmpTicks}}</td><td>{{f1 .PhaseDeg}}°</td><td>{{f3 .SigmaArc}}″</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+
+  <h3>Before and after</h3>
+  <table class="numbers">
+    <thead><tr><th></th><th>RMS</th><th>Peak-to-peak</th></tr></thead>
+    <tbody>
+      <tr><td>Detrended samples (periodic + seeing)</td><td>{{f2 .Res.Fit.DetrendedRMS}}″</td><td>{{f2 .Res.Fit.DetrendedP2P}}″</td></tr>
+      <tr><td>Fitted periodic curve</td><td>{{f2 .Res.Fit.ModelRMS}}″</td><td>{{f2 .Res.Fit.PeakToPeak}}″</td></tr>
+      <tr><td>Residual after ideal PEC</td><td>{{f2 .Res.Fit.ResidualRMS}}″</td><td>{{f2 .Res.Fit.ResidualP2P}}″</td></tr>
+    </tbody>
+  </table>
+
+  <details>
+    <summary>Session details</summary>
+    <dl class="kv">
+      <dt>Target</dt><dd>RA {{f2 .Res.Session.RAHours}} h · Dec {{f1 .Res.Session.DecDeg}}° · HA {{f2 .Res.Session.HourAngle}} h · alt {{f1 .Res.Session.AltDeg}}° · pier {{.Res.Session.PierSide}}</dd>
+      <dt>Capture</dt><dd>{{f2 .Res.Session.PixelScale}}″/px · bin {{.Res.Session.Binning}} · exposure {{.Res.Session.ExposureMS}} ms · {{.Res.Session.Camera}}</dd>
+      <dt>Rows used</dt><dd>{{.Res.Used}} of {{len .Res.Session.Samples}}{{if .Res.Guiding.IsGA}} · Guiding Assistant run{{end}}{{if .Res.Guiding.Corrections}} · {{.Res.Guiding.Corrections}} rows with RA pulses{{end}}</dd>
+      <dt>Options</dt><dd>{{.Res.Params.Harmonics}} harmonics · drift order {{.Res.Params.PolyOrder}} · exclude {{f0 .Res.Params.ExcludeAfter}} s after dithers · min segment {{.Res.Params.MinSegment}} · RA sign {{f0 .Res.Params.RASign}}</dd>
+      <dt>Segment offsets</dt><dd>{{range $i, $o := .Res.Fit.Offsets}}{{if $i}}, {{end}}{{f2 $o}}″{{end}}</dd>
+    </dl>
+  </details>
+</section>
+{{end}}{{end}}
