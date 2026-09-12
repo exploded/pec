@@ -5,7 +5,7 @@
 // Usage:
 //
 //	pec            serve with the defaults (what a double-click does)
-//	pec [-addr 127.0.0.1:8990] [-db pec.db] [-data ./data] [-tz Local]
+//	pec [-addr 127.0.0.1:8990] [-db pec.db] [-data ./data] [-tz Local] [-phd2 Documents/PHD2]
 //	pec serve ...  the same, spelled out
 //	pec version
 package main
@@ -40,11 +40,12 @@ func main() {
 	dataDir := fs.String("data", "data", "directory for uploaded files")
 	dbPath := fs.String("db", "pec.db", "SQLite history database")
 	tz := fs.String("tz", "Local", "time zone the PHD2 logs were written in (IANA name or Local)")
+	phd2Dir := fs.String("phd2", "", "PHD2 guide-log folder offered on the Analyse page (default Documents/PHD2)")
 	_ = fs.Parse(args)
 
 	switch cmd {
 	case "serve":
-		if err := serve(*addr, *dataDir, *dbPath, *tz); err != nil {
+		if err := serve(*addr, *dataDir, *dbPath, *tz, *phd2Dir); err != nil {
 			fmt.Fprintln(os.Stderr, "pec:", err)
 			os.Exit(1)
 		}
@@ -56,12 +57,12 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: pec [serve] [-addr 127.0.0.1:8990] [-db pec.db] [-data data] [-tz Local]")
+	fmt.Fprintln(os.Stderr, "usage: pec [serve] [-addr 127.0.0.1:8990] [-db pec.db] [-data data] [-tz Local] [-phd2 dir]")
 	fmt.Fprintln(os.Stderr, "       pec version")
 	os.Exit(2)
 }
 
-func serve(addr, dataDir, dbPath, tz string) error {
+func serve(addr, dataDir, dbPath, tz, phd2Dir string) error {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	loc := time.Local
 	if tz != "" && tz != "Local" {
@@ -75,7 +76,7 @@ func serve(addr, dataDir, dbPath, tz string) error {
 		return fmt.Errorf("database %s: %w", dbPath, err)
 	}
 	defer st.Close()
-	srv, err := web.New(web.Options{DataDir: dataDir, Loc: loc, Version: version(), Store: st}, logger)
+	srv, err := web.New(web.Options{DataDir: dataDir, Loc: loc, Version: version(), Store: st, PHD2Dir: phd2Dir}, logger)
 	if err != nil {
 		return err
 	}

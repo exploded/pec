@@ -42,6 +42,7 @@ type Options struct {
 	Version string
 	TCS     tcs.Config
 	Store   *store.Store
+	PHD2Dir string // PHD2 guide-log folder offered on the Analyse page; default Documents/PHD2
 	NINADir string // NINA profile directory for the Target page; default from the environment
 }
 
@@ -79,6 +80,9 @@ func New(opt Options, logger *slog.Logger) (*Server, error) {
 	if opt.TCS.ArcsecPerTick == 0 {
 		opt.TCS = tcs.DefaultConfig()
 	}
+	if opt.PHD2Dir == "" {
+		opt.PHD2Dir = defaultPHD2Dir()
+	}
 	if opt.NINADir == "" {
 		opt.NINADir = sky.NINAProfilesDir()
 	}
@@ -108,6 +112,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /{$}", s.index)
 	mux.HandleFunc("GET /analyse", s.analysePage)
 	mux.HandleFunc("POST /analyse/upload", s.analyseUpload)
+	mux.HandleFunc("POST /analyse/local", s.analyseLocal)
 	mux.HandleFunc("POST /analyse", s.analyseRun)
 	mux.HandleFunc("GET /table", s.tablePage)
 	mux.HandleFunc("POST /table", s.tableRun)
@@ -336,4 +341,13 @@ func validSHA(sha string) bool {
 	}
 	_, err := hex.DecodeString(sha)
 	return err == nil
+}
+
+// defaultPHD2Dir is where PHD2 writes guide logs on Windows.
+func defaultPHD2Dir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, "Documents", "PHD2")
 }

@@ -25,7 +25,7 @@ Everything is `go:embed`-ed (templates, CSS, schema); the deployable is `pec.exe
 ```
 sqlc generate             after editing internal/store/queries.sql or schema.sql
 build.bat                 vet + test + build pec.exe
-pec.exe                   http://127.0.0.1:8990/  (-addr, -db pec.db, -data ./data, -tz Local);
+pec.exe                   http://127.0.0.1:8990/  (-addr, -db pec.db, -data ./data, -tz Local, -phd2 Documents/PHD2);
                           no subcommand or flags only = serve, so a double-click works
 pec.exe version           VCS revision from the Go toolchain (no ldflags)
 ```

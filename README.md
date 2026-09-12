@@ -21,7 +21,7 @@ default the machine's local zone).
 
 ## What it does
 
-- **Analyse log**: upload a PHD2 guide log, pick a session, get the fitted worm period with its
+- **Analyse log**: upload a PHD2 guide log, or pick one from the PHD2 folder on this PC (`-phd2`, default Documents/PHD2), pick a session, get the fitted worm period with its
   uncertainty, the amplitude and phase of each harmonic, the drift rate, and the RMS before and
   after removing the fitted curve, with charts: the samples folded at the worm period with the
   fitted curve, the residual over time, the harmonic amplitudes, and the period scan. Warns when

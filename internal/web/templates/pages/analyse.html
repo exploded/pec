@@ -16,5 +16,25 @@ The result is saved and opens on its own page.</p>
   <div id="upload-error" class="slot"></div>
 </form>
 
+{{with .Data}}
+<form class="card" hx-post="/analyse/local" hx-target="#sessions" hx-swap="innerHTML"
+      hx-status:422="target:#local-error swap:innerHTML">
+  {{if .Local}}
+  <div class="row">
+    <label>Or pick a log from the PHD2 folder on this PC
+      <select name="name">
+        {{range .Local}}<option value="{{.Name}}">{{.Name}} · {{.When}} · {{.Size}}{{if .Today}} · today{{end}}</option>{{end}}
+      </select>
+    </label>
+    <button type="submit" hx-disable="this">List sessions</button>
+  </div>
+  <p class="small">Newest first, from {{.PHD2Dir}}.</p>
+  {{else}}
+  <p class="small">No guide logs found in {{.PHD2Dir}} (start pec with -phd2 to point at another folder).</p>
+  {{end}}
+  <div id="local-error" class="slot"></div>
+</form>
+{{end}}
+
 <div id="sessions" class="slot">{{with .Data}}{{if .Sessions}}{{template "analyse/_sessions" $}}{{end}}{{end}}</div>
 {{end}}

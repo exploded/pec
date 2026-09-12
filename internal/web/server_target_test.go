@@ -54,6 +54,41 @@ func TestTargetFlow(t *testing.T) {
 	}
 }
 
+func TestAnalyseLocal(t *testing.T) {
+	loc, _ := time.LoadLocation("Australia/Melbourne")
+	dir := t.TempDir()
+	st, err := store.Open(filepath.Join(dir, "pec.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	phd := filepath.Join(dir, "PHD2")
+	os.MkdirAll(phd, 0o755)
+	data, _ := os.ReadFile("../../testdata/guidelog_excerpt.txt")
+	os.WriteFile(filepath.Join(phd, "PHD2_GuideLog_2026-09-11_115345.txt"), data, 0o644)
+	os.WriteFile(filepath.Join(phd, "PHD2_DebugLog_2026-09-11_115345.txt"), []byte("x"), 0o644)
+	s, err := New(Options{DataDir: dir, Loc: loc, Version: "test", Store: st, PHD2Dir: phd}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+
+	_, page := get(t, ts, "/analyse")
+	if !strings.Contains(page, `value="PHD2_GuideLog_2026-09-11_115345.txt"`) || strings.Contains(page, "DebugLog") {
+		t.Fatalf("local list: %s", page)
+	}
+	resp, body := postForm(t, ts, "/analyse/local", url.Values{"name": {"PHD2_GuideLog_2026-09-11_115345.txt"}})
+	if resp.StatusCode != 200 || !strings.Contains(body, "Guiding Assistant run") || !strings.Contains(body, "PHD2_GuideLog_2026-09-11_115345.txt") {
+		t.Fatalf("local sessions: %d %s", resp.StatusCode, body)
+	}
+	for _, bad := range []string{"../pec.db", "PHD2_GuideLog_missing.txt", "notes.txt"} {
+		if resp, _ := postForm(t, ts, "/analyse/local", url.Values{"name": {bad}}); resp.StatusCode != 422 {
+			t.Errorf("%q: %d", bad, resp.StatusCode)
+		}
+	}
+}
+
 func TestTonightPage(t *testing.T) {
 	ts := newTestServer(t)
 	resp, body := get(t, ts, "/tonight")
