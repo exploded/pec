@@ -95,3 +95,10 @@ pre.table-text {
   background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem;
 }
 details.card > summary { color: var(--text-primary); }
+
+/* Target page */
+table.targets tr.pick td { background: var(--good-bg); }
+table.targets tr.pick td:first-child { border-left: 3px solid var(--good-line); }
+table.targets tr.dim { color: var(--muted); }
+table.targets tr.good td:last-child { color: var(--good-text); }
+.warn-text { color: var(--warn-text); }

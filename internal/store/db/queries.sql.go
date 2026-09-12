@@ -199,6 +199,17 @@ func (q *Queries) GetRun(ctx context.Context, id int64) (Run, error) {
 	return i, err
 }
 
+const getSetting = `-- name: GetSetting :one
+SELECT value FROM settings WHERE key = ?
+`
+
+func (q *Queries) GetSetting(ctx context.Context, key string) (string, error) {
+	row := q.db.QueryRowContext(ctx, getSetting, key)
+	var value string
+	err := row.Scan(&value)
+	return value, err
+}
+
 const insertAnchor = `-- name: InsertAnchor :execresult
 INSERT INTO anchors (created_at, pec_index, at, sigma_s, source, period_s, period_sigma_s, readings, note)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -772,6 +783,21 @@ func (q *Queries) ListTableRuns(ctx context.Context, limit int64) ([]Run, error)
 		return nil, err
 	}
 	return items, nil
+}
+
+const setSetting = `-- name: SetSetting :exec
+INSERT INTO settings (key, value) VALUES (?, ?)
+ON CONFLICT(key) DO UPDATE SET value = excluded.value
+`
+
+type SetSettingParams struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+func (q *Queries) SetSetting(ctx context.Context, arg SetSettingParams) error {
+	_, err := q.db.ExecContext(ctx, setSetting, arg.Key, arg.Value)
+	return err
 }
 
 const updateFitNotes = `-- name: UpdateFitNotes :exec

@@ -1,0 +1,81 @@
+{{define "target/_result"}}{{with .Data}}
+{{if not .HasSite}}
+<div class="card muted"><p>Enter the site first. The star list depends on where you are and what time it is.</p></div>
+{{else}}
+{{if .Pick}}
+<div class="verdict good">
+  <p class="headline">Slew to {{.Pick.Name}}</p>
+  <p class="detail">Find accepts <b>{{.Pick.Name}}</b>, <b>{{.Pick.Bayer}}</b> or <b>HIP {{.Pick.HIP}}</b>.
+    Hour angle {{.Pick.HAText}}, altitude {{.Pick.AltText}}°, Dec {{.Pick.DecText}}°, magnitude {{.Pick.MagText}}.
+    Stays in the window for another {{.Pick.GoodFor.Minutes | f0}} min.</p>
+</div>
+{{else if .Next}}
+<div class="verdict warn">
+  <p class="headline">Nothing in the window yet</p>
+  <p class="detail">{{.Next.Name}} ({{.Next.Bayer}}) enters it in {{.Next.GoodIn.Minutes | f0}} min. Until then use the
+    chart: {{.IdealText}} is the middle of the window right now.</p>
+</div>
+{{else}}
+<div class="verdict warn">
+  <p class="headline">No listed star fits</p>
+  <p class="detail">Use the chart: turn on the celestial equator and meridian lines and click any star near
+    {{.IdealText}}.</p>
+</div>
+{{end}}
+
+<div class="card">
+  <div class="row between">
+    <div>
+      <div class="small">{{if .Live}}Now{{else}}Planned for{{end}}</div>
+      <div class="mono">{{.AtText}}</div>
+    </div>
+    <div><div class="small">Site</div><div class="mono">{{.SiteText}}</div></div>
+    <div><div class="small">Sidereal time</div><div class="mono">{{.LSTText}}</div></div>
+    <div><div class="small">Middle of the window</div><div class="mono">{{.IdealText}}</div></div>
+    <div><div class="small">Moon</div><div class="mono{{if .MoonWarn}} warn-text{{end}}">{{.MoonText}}</div></div>
+  </div>
+  <p class="small">Window: hour angle {{.Window.MinHA | f2}} to {{.Window.MaxHA | f2}} h (east negative), altitude
+    above {{.Window.MinAlt | f0}}°, more than {{.Window.MoonSep | f0}}° from a Moon over {{.Window.MoonIllum | f0mul}} % lit.
+    {{if .Live}}Refreshes every minute.{{end}}</p>
+</div>
+
+<div class="card">
+<div class="scroll">
+<table class="runs targets">
+  <thead><tr><th>Star</th><th>Find as</th><th>RA</th><th>Dec</th><th>Mag</th><th>Hour angle</th><th>Alt</th><th>Moon</th><th>Status</th></tr></thead>
+  <tbody>
+  {{range .Rows}}
+  <tr class="{{.Class}}{{if .Recommend}} pick{{end}}">
+    <td><b>{{.Name}}</b></td>
+    <td class="small">{{.Bayer}} · HIP {{.HIP}}</td>
+    <td class="mono">{{.RAText}}</td>
+    <td class="mono">{{.DecText}}°</td>
+    <td class="mono">{{.MagText}}</td>
+    <td class="mono">{{.HAText}}</td>
+    <td class="mono">{{.AltText}}°</td>
+    <td class="mono">{{.MoonSep | f0}}°</td>
+    <td>{{.StatusText}}</td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{if .Later}}
+<details class="params">
+  <summary>{{len .Later}} more stars past the meridian or never high enough</summary>
+  <div class="scroll">
+  <table class="runs targets">
+    <tbody>
+    {{range .Later}}
+    <tr class="dim"><td><b>{{.Name}}</b></td><td class="small">{{.Bayer}}</td><td class="mono">{{.RAText}}</td>
+      <td class="mono">{{.DecText}}°</td><td class="mono">{{.MagText}}</td><td class="mono">{{.HAText}}</td>
+      <td class="mono">{{.AltText}}°</td><td class="mono">{{.MoonSep | f0}}°</td><td>{{.StatusText}}</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+</details>
+{{end}}
+</div>
+{{end}}
+{{end}}{{end}}

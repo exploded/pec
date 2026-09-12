@@ -1,0 +1,34 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>Where to point</h1>
+<p class="lede">A PEC run wants a field near the celestial equator, one to two hours east of the meridian, so the
+mount stays on one pier side for an hour without a flip. TheSkyX's Find box only takes names, so this page
+names a bright star that is in that window right now. Type the name into Find, press Slew, then in PHD2
+pick any guide star in the field (not the bright one if it saturates).</p>
+
+{{with .Data}}
+<form id="site-form" class="card" hx-post="/target" hx-target="#target-result" hx-swap="innerHTML"
+      hx-status:422="target:#target-error swap:innerHTML"
+      hx-on::before:request="document.getElementById('target-error').innerHTML=''">
+  <div class="grid">
+    <label>Latitude (south negative) <input type="number" name="lat" value="{{.Lat}}" step="any" min="-90" max="90" placeholder="-37.8136" required></label>
+    <label>Longitude (west negative) <input type="number" name="lon" value="{{.Lon}}" step="any" min="-180" max="180" placeholder="144.9631" required></label>
+    <label>Plan for (leave empty for now) <input type="datetime-local" name="at" value="{{.At}}"></label>
+  </div>
+  <div class="row">
+    <button type="submit" hx-disable="this">Show targets</button>
+    <button type="button" class="small-btn" hx-post="/target/nina" hx-disable="this"
+            hx-status:422="target:#target-error swap:innerHTML"
+            hx-on::before:request="document.getElementById('target-error').innerHTML=''"
+            title="Reads the newest profile in {{.NINADir}}">Read from NINA</button>
+    <div id="target-error" class="slot inline"></div>
+  </div>
+  <p class="small">TheSkyX shows the site under Input, Location. NINA keeps it in its profile; the button reads that file (nothing is written).</p>
+</form>
+
+<div id="target-result" class="slot"
+     {{if .Live}}hx-get="/target" hx-include="#site-form" hx-trigger="every 60s" hx-swap="innerHTML"{{end}}>
+  {{template "target/_result" $}}
+</div>
+{{end}}
+{{end}}

@@ -50,13 +50,15 @@ internal/tcs/       TCS PEC table read/write, ticks <-> arcsec, quantisation
 internal/pe/        the numerics: segmentation, Householder QR, joint LS fit, periodogram, DFT
 internal/mks/       MKS 4000 protocol from a USBPcap capture: pcap/pcapng reader, frame splitter,
                     request/reply pairing, encoder-rate and index analysis (watch.go), Synth for tests
+internal/sky/       sidereal time, altitude, a low-precision Moon, bright equatorial stars, and the
+                    NINA profile reader (JSON or XML) behind the Target page
 internal/analysis/  joins parsers to the fitter; the policy layer (which rows count, warnings);
                     fit.go (table writer, both phase modes, phase-error budget), meta.go (provenance)
 internal/report/    ReportData builders, Go-generated inline SVG (svg.go), report.css tokens,
                     body.tmpl (embedded in pages) and page.tmpl (standalone download)
 internal/store/     schema.sql, queries.sql, open.go, store.go (save helpers), db/ (sqlc)
 internal/web/       http server, handlers (handlers.go analyse/table, handlers_runs.go runs/verify,
-                    handlers_fit.go anchor/fit/fits), embedded templates and static files
+                    handlers_fit.go anchor/fit/fits, handlers_target.go where to point), embedded templates and static files
 testdata/           real guide-log excerpt (4 sessions) and the real TCS table
 ```
 
@@ -115,6 +117,14 @@ synthetic capture for tests; the real capture lives in `.local/cpature.pcapng` (
 - Every guide-log amplitude is in RA-axis arcseconds: `analysis.sessionSamples` divides the PHD2
   sky error by cos(Dec) (PHD2 sees the axis error foreshortened; the table is in axis units).
   Verify ratios are unaffected; index-mode tables would otherwise be low by cos(Dec).
+
+## Target page
+
+`sky.PlanAt` classifies the star list against `sky.DefaultWindow` (HA -2 to -0.75 h, alt over 30,
+30 degrees from a Moon over a quarter lit). The pick is the equator-nearest star with at least
+`MinGoodFor` left. Site lat/lon live in the `settings` table (`site.lat`, `site.lon`); "Read from
+NINA" parses the newest `.profile` in `%LOCALAPPDATA%\NINA\Profiles` (current NINA writes XML;
+a 0, 0 site is rejected). Never writes to NINA or TheSkyX.
 
 ## Gotchas
 

@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/exploded/pec/internal/report"
+	"github.com/exploded/pec/internal/sky"
 	"github.com/exploded/pec/internal/store"
 	"github.com/exploded/pec/internal/tcs"
 )
@@ -41,6 +42,7 @@ type Options struct {
 	Version string
 	TCS     tcs.Config
 	Store   *store.Store
+	NINADir string // NINA profile directory for the Target page; default from the environment
 }
 
 // Server holds parsed templates and the request handlers.
@@ -76,6 +78,9 @@ func New(opt Options, logger *slog.Logger) (*Server, error) {
 	}
 	if opt.TCS.ArcsecPerTick == 0 {
 		opt.TCS = tcs.DefaultConfig()
+	}
+	if opt.NINADir == "" {
+		opt.NINADir = sky.NINAProfilesDir()
 	}
 	if opt.Store == nil {
 		return nil, errors.New("web: a store is required")
@@ -123,6 +128,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /fits/{id}/pec_table.meta.json", s.fitMetaDownload)
 	mux.HandleFunc("POST /fits/{id}/delete", s.fitDelete)
 	mux.HandleFunc("POST /fits/{id}/notes", s.fitNotes)
+	mux.HandleFunc("GET /target", s.targetPage)
+	mux.HandleFunc("POST /target", s.targetSave)
+	mux.HandleFunc("POST /target/nina", s.targetNINA)
 	mux.HandleFunc("GET /capture", s.capturePage)
 	mux.HandleFunc("POST /capture", s.captureUpload)
 	mux.HandleFunc("POST /capture/save", s.captureSave)
@@ -167,6 +175,7 @@ func loadTemplates() (map[string]*template.Template, error) {
 		"dur":   func(d time.Duration) string { return d.Round(time.Second).String() },
 		"ts":    func(t time.Time) string { return t.Format("2006-01-02 15:04:05") },
 		"lower": strings.ToLower,
+		"f0mul": func(v float64) string { return fmt.Sprintf("%.0f", v*100) },
 		"ticks": func(arcsec float64, cfg tcs.Config) float64 { return arcsec / cfg.ArcsecPerTick },
 		"arc":   func(ticks int, cfg tcs.Config) float64 { return float64(ticks) * cfg.ArcsecPerTick },
 		"arcf":  func(ticks float64, cfg tcs.Config) float64 { return ticks * cfg.ArcsecPerTick },

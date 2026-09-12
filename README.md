@@ -49,6 +49,11 @@ default the machine's local zone).
   and a `.meta.json` with the full provenance (source file and hash, session, anchor, period and
   its source, harmonics, sign convention, warnings) so the fit can be rebuilt later.
 
+- **Target**: where to point for a run. Enter the site once (or read it from the NINA profile on the
+  same PC) and the page names a bright star near the celestial equator that is one to two hours east
+  of the meridian right now, with its hour angle, altitude and distance from the Moon, so it can be
+  typed into TheSkyX's Find box. A time field plans ahead.
+
 - **Capture** (milestone 4): upload a passive USB capture of the TheSkyX-to-mount link
   (Wireshark with USBPcap; nothing is sent to the mount). pec decodes the MKS 4000 protocol,
   fits the HA encoder rate while tracking, and reads the PEC index TheSkyX polls while the TCS

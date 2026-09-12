@@ -121,3 +121,10 @@ CREATE TABLE IF NOT EXISTS captures (
     warnings_json    TEXT NOT NULL DEFAULT '[]',
     notes            TEXT NOT NULL DEFAULT ''
 );
+
+-- Small key/value settings the UI remembers between sessions (site
+-- latitude and longitude for the Target page).
+CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);

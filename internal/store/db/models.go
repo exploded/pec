@@ -115,3 +115,8 @@ type Run struct {
 	ToolVersion    string        `json:"tool_version"`
 	Notes          string        `json:"notes"`
 }
+
+type Setting struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}

@@ -275,3 +275,17 @@ func mustJSON(v any) string {
 	}
 	return string(b)
 }
+
+// Setting returns a remembered UI value, or "" when unset.
+func (s *Store) Setting(ctx context.Context, key string) string {
+	v, err := s.Q.GetSetting(ctx, key)
+	if err != nil {
+		return ""
+	}
+	return v
+}
+
+// SetSetting remembers a UI value.
+func (s *Store) SetSetting(ctx context.Context, key, value string) error {
+	return s.Q.SetSetting(ctx, db.SetSettingParams{Key: key, Value: value})
+}

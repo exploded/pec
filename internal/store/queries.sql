@@ -96,3 +96,10 @@ SELECT * FROM captures ORDER BY created_at DESC, id DESC LIMIT ?;
 
 -- name: DeleteCapture :exec
 DELETE FROM captures WHERE id = ?;
+
+-- name: GetSetting :one
+SELECT value FROM settings WHERE key = ?;
+
+-- name: SetSetting :exec
+INSERT INTO settings (key, value) VALUES (?, ?)
+ON CONFLICT(key) DO UPDATE SET value = excluded.value;
