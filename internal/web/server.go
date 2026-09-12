@@ -128,6 +128,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /fits/{id}/pec_table.meta.json", s.fitMetaDownload)
 	mux.HandleFunc("POST /fits/{id}/delete", s.fitDelete)
 	mux.HandleFunc("POST /fits/{id}/notes", s.fitNotes)
+	mux.HandleFunc("GET /tonight", func(w http.ResponseWriter, r *http.Request) {
+		s.page(w, r, "tonight", "", pageData{Title: "Tonight", Nav: "tonight"})
+	})
 	mux.HandleFunc("GET /target", s.targetPage)
 	mux.HandleFunc("POST /target", s.targetSave)
 	mux.HandleFunc("POST /target/nina", s.targetNINA)

@@ -102,3 +102,9 @@ table.targets tr.pick td:first-child { border-left: 3px solid var(--good-line); 
 table.targets tr.dim { color: var(--muted); }
 table.targets tr.good td:last-child { color: var(--good-text); }
 .warn-text { color: var(--warn-text); }
+
+/* Tonight checklist */
+ol.checklist { padding-left: 1.5rem; margin: 0 0 1rem; }
+ol.checklist li { margin: 0.5rem 0; line-height: 1.45; max-width: 90ch; }
+ol.checklist li.done { color: var(--muted); text-decoration: line-through; }
+ol.checklist input { margin-right: 0.4rem; }

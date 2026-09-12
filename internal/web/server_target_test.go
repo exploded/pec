@@ -54,6 +54,14 @@ func TestTargetFlow(t *testing.T) {
 	}
 }
 
+func TestTonightPage(t *testing.T) {
+	ts := newTestServer(t)
+	resp, body := get(t, ts, "/tonight")
+	if resp.StatusCode != 200 || !strings.Contains(body, "ProTrack off") || strings.Count(body, "data-step=") != 16 {
+		t.Fatalf("tonight: %d", resp.StatusCode)
+	}
+}
+
 func TestTargetNINA(t *testing.T) {
 	loc, _ := time.LoadLocation("Australia/Melbourne")
 	dir := t.TempDir()

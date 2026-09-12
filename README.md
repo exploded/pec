@@ -49,6 +49,7 @@ default the machine's local zone).
   and a `.meta.json` with the full provenance (source file and hash, session, anchor, period and
   its source, harmonics, sign convention, warnings) so the fit can be rebuilt later.
 
+- **Tonight**: the measuring-night checklist, ticks kept in the browser.
 - **Target**: where to point for a run. Enter the site once (or read it from the NINA profile on the
   same PC) and the page names a bright star near the celestial equator that is one to two hours east
   of the meridian right now, with its hour angle, altitude and distance from the Moon, so it can be

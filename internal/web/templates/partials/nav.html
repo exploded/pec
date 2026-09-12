@@ -2,6 +2,7 @@
   <a class="brand" href="/">pec</a>
   <nav>
     <a href="/" {{if eq .Nav "home"}}class="active"{{end}}>Runs</a>
+    <a href="/tonight" {{if eq .Nav "tonight"}}class="active"{{end}}>Tonight</a>
     <a href="/analyse" {{if eq .Nav "analyse"}}class="active"{{end}}>Analyse log</a>
     <a href="/table" {{if eq .Nav "table"}}class="active"{{end}}>TCS table</a>
     <a href="/verify" {{if eq .Nav "verify"}}class="active"{{end}}>Verify</a>
