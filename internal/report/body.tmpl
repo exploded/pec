@@ -1,0 +1,47 @@
+{{define "report-body"}}<div class="report">
+  {{if .Verdict.Headline}}
+  <div class="verdict {{.Verdict.Level}}">
+    <p class="headline">{{.Verdict.Headline}}</p>
+    <p class="detail">{{.Verdict.Detail}}</p>
+  </div>
+  {{end}}
+  {{if .Warnings}}
+  <ul class="warnings">{{range .Warnings}}<li>{{.}}</li>{{end}}</ul>
+  {{end}}
+  {{if .Stats}}
+  <div class="stats">
+    {{range .Stats}}<div class="stat"><div class="k">{{.K}}</div><div class="v">{{.V}}</div>{{if .Small}}<div class="s">{{.Small}}</div>{{end}}</div>{{end}}
+  </div>
+  {{end}}
+  {{range .Charts}}
+  <div class="chart">
+    <h3>{{.Title}}</h3>
+    {{if .Note}}<p class="note">{{.Note}}</p>{{end}}
+    {{if .Legend}}<div class="legend">{{range .Legend}}<span><i class="dot {{.Class}}"></i>{{.Label}}</span>{{end}}</div>{{end}}
+    <div class="chartbox">{{.SVG}}</div>
+  </div>
+  {{end}}
+  {{if .Harmonics}}
+  <h3>Harmonics <span class="note-inline">{{.HarmonicsNote}}</span></h3>
+  <table class="numbers">
+    <thead><tr><th>k</th><th>Period</th>{{if .Compare}}<th>Before</th><th>After</th><th>Ratio</th>{{else}}<th>Amplitude</th><th>Ticks</th><th>Phase</th><th>± amplitude</th>{{end}}</tr></thead>
+    <tbody>
+    {{range .Harmonics}}<tr><td>{{.K}}</td><td>{{.Period}}</td>{{if $.Compare}}<td>{{.Before}}</td><td>{{.After}}</td><td>{{.Ratio}}</td>{{else}}<td>{{.Amp}}</td><td>{{.Ticks}}</td><td>{{.Phase}}</td><td>{{.Sigma}}</td>{{end}}</tr>{{end}}
+    </tbody>
+  </table>
+  {{end}}
+  {{if .Rows}}
+  <h3>{{.RowsTitle}}</h3>
+  <table class="numbers">
+    <thead><tr>{{range .RowsHead}}<th>{{.}}</th>{{end}}</tr></thead>
+    <tbody>{{range .Rows}}<tr>{{range .}}<td>{{.}}</td>{{end}}</tr>{{end}}</tbody>
+  </table>
+  {{end}}
+  {{if .Source}}
+  <details>
+    <summary>Source and options</summary>
+    <dl class="kv">{{range .Source}}<dt>{{.K}}</dt><dd>{{.V}}</dd>{{end}}</dl>
+  </details>
+  {{end}}
+  {{if .Notes}}<p class="foot">{{range .Notes}}{{.}} {{end}}</p>{{end}}
+</div>{{end}}

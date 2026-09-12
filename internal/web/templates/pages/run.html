@@ -1,0 +1,33 @@
+{{template "base" .}}
+{{define "content"}}
+{{with .Data}}
+<div class="row between">
+  <h1>{{$.Title}}</h1>
+  <div class="row">
+    <a class="btn" href="/runs/{{.Run.ID}}/report.html">Download report</a>
+    <form method="post" action="/runs/{{.Run.ID}}/delete" hx-post="/runs/{{.Run.ID}}/delete" hx-confirm="Delete run {{.Run.ID}}? The uploaded file is kept.">
+      <button type="submit" class="danger" hx-disable="this">Delete</button>
+    </form>
+  </div>
+</div>
+<p class="lede">Run {{.Run.ID}} · analysed {{.Run.When}} · {{.Run.SourceName}}</p>
+
+{{.Body}}
+
+<form class="card notes" hx-post="/runs/{{.Run.ID}}/notes" hx-swap="none">
+  <div class="grid">
+    {{if not .IsTable}}
+    <label>Mount PEC during this run
+      <select name="pec_on">
+        <option value="" {{if eq .PecOn ""}}selected{{end}}>unknown</option>
+        <option value="off" {{if eq .PecOn "off"}}selected{{end}}>off</option>
+        <option value="on" {{if eq .PecOn "on"}}selected{{end}}>on</option>
+      </select>
+    </label>
+    {{end}}
+    <label class="wide">Notes <input type="text" name="notes" value="{{.Notes}}" placeholder="seeing, wind, what changed…"></label>
+  </div>
+  <div class="row"><button type="submit" hx-disable="this">Save notes</button></div>
+</form>
+{{end}}
+{{end}}

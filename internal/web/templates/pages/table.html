@@ -3,20 +3,19 @@
 <h1>Analyse a TCS table</h1>
 <p class="lede">Upload the PEC table copied out of the Bisque TCS window (index and value per line,
 comment lines starting with # are fine). The harmonic breakdown uses the same units as a guide-log
-analysis, so the two compare directly.</p>
+analysis, so the two compare directly. The result is saved and opens on its own page.</p>
 
 <form class="card" hx-post="/table" hx-encoding="multipart/form-data"
-      hx-target="#table-result" hx-swap="innerHTML" hx-status:422="target:#table-error swap:innerHTML">
+      hx-target="#table-error" hx-swap="innerHTML" hx-status:422="target:#table-error swap:innerHTML">
   <div class="grid">
     <label>TCS table <input type="file" name="table" accept=".txt,text/plain" required></label>
     <label>Harmonics <input type="number" name="harmonics" value="{{.Data.Harmonics}}" min="1" max="12"></label>
     <label>Arcsec per tick <input type="number" name="arcsec_per_tick" value="{{.Data.ArcsecPerTick}}" step="0.0001" min="0.0001"></label>
+    <label class="wide">Notes <input type="text" name="notes" placeholder="e.g. table read from the mount 2026-09-12"></label>
   </div>
   <div class="row">
-    <button type="submit" hx-disable="this">Analyse table</button>
+    <button type="submit" hx-disable="this">Analyse and save</button>
     <div id="table-error" class="slot inline"></div>
   </div>
 </form>
-
-<div id="table-result" class="slot">{{with .Data}}{{if .Res}}{{template "table/_result" $}}{{end}}{{end}}</div>
 {{end}}

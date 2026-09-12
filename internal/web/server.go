@@ -20,10 +20,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/exploded/pec/internal/report"
+	"github.com/exploded/pec/internal/store"
 	"github.com/exploded/pec/internal/tcs"
 )
 
-// all: is required because fragment files start with "_", which a plain
+// all: is required because fragment templates start with "_", which a plain
 // directory embed would skip.
 //
 //go:embed all:templates
@@ -38,6 +40,7 @@ type Options struct {
 	Loc     *time.Location // zone the PHD2 log timestamps were written in
 	Version string
 	TCS     tcs.Config
+	Store   *store.Store
 }
 
 // Server holds parsed templates and the request handlers.
@@ -45,6 +48,7 @@ type Server struct {
 	opt   Options
 	pages map[string]*template.Template
 	log   *slog.Logger
+	st    *store.Store
 }
 
 // New loads the templates and prepares the data directory.
@@ -55,6 +59,9 @@ func New(opt Options, logger *slog.Logger) (*Server, error) {
 	if opt.TCS.ArcsecPerTick == 0 {
 		opt.TCS = tcs.DefaultConfig()
 	}
+	if opt.Store == nil {
+		return nil, errors.New("web: a store is required")
+	}
 	if err := os.MkdirAll(filepath.Join(opt.DataDir, "files"), 0o755); err != nil {
 		return nil, fmt.Errorf("data dir: %w", err)
 	}
@@ -62,7 +69,7 @@ func New(opt Options, logger *slog.Logger) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Server{opt: opt, pages: pages, log: logger}, nil
+	return &Server{opt: opt, pages: pages, log: logger, st: opt.Store}, nil
 }
 
 // Handler builds the router.
@@ -70,20 +77,37 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	static, _ := fs.Sub(staticFS, "static")
 	mux.Handle("GET /static/", http.StripPrefix("/static/", cacheStatic(http.FileServerFS(static))))
+	mux.HandleFunc("GET /report.css", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		_, _ = io.WriteString(w, report.CSS())
+	})
 	mux.HandleFunc("GET /{$}", s.index)
 	mux.HandleFunc("GET /analyse", s.analysePage)
 	mux.HandleFunc("POST /analyse/upload", s.analyseUpload)
 	mux.HandleFunc("POST /analyse", s.analyseRun)
 	mux.HandleFunc("GET /table", s.tablePage)
 	mux.HandleFunc("POST /table", s.tableRun)
+	mux.HandleFunc("GET /runs/{id}", s.runPage)
+	mux.HandleFunc("GET /runs/{id}/report.html", s.runReport)
+	mux.HandleFunc("POST /runs/{id}/delete", s.runDelete)
+	mux.HandleFunc("POST /runs/{id}/notes", s.runNotes)
+	mux.HandleFunc("GET /verify", s.verifyPage)
+	mux.HandleFunc("POST /verify", s.verifyRun)
 
 	cop := http.NewCrossOriginProtection()
 	return cop.Handler(s.logging(mux))
 }
 
+// cacheStatic lets the browser cache the vendored htmx build but revalidate
+// the stylesheet on every load, so a rebuilt binary never shows stale CSS.
 func cacheStatic(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "public, max-age=3600")
+		if strings.HasSuffix(r.URL.Path, ".css") {
+			w.Header().Set("Cache-Control", "no-cache")
+		} else {
+			w.Header().Set("Cache-Control", "public, max-age=86400")
+		}
 		h.ServeHTTP(w, r)
 	})
 }
@@ -92,25 +116,24 @@ func (s *Server) logging(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		h.ServeHTTP(w, r)
-		if !strings.HasPrefix(r.URL.Path, "/static/") {
+		if !strings.HasPrefix(r.URL.Path, "/static/") && r.URL.Path != "/report.css" {
 			s.log.Info("http", "method", r.Method, "path", r.URL.Path, "ms", time.Since(start).Milliseconds())
 		}
 	})
 }
 
 // loadTemplates parses layouts and partials into a base, then clones the
-// base per page so each page's "content" block is isolated.
+// base per page so each page's "content" block is isolated. Fragment files
+// (leading underscore) are parsed into every page.
 func loadTemplates() (map[string]*template.Template, error) {
 	funcs := template.FuncMap{
-		"f0":  func(v float64) string { return fmt.Sprintf("%.0f", v) },
-		"f1":  func(v float64) string { return fmt.Sprintf("%.1f", v) },
-		"f2":  func(v float64) string { return fmt.Sprintf("%.2f", v) },
-		"f3":  func(v float64) string { return fmt.Sprintf("%.3f", v) },
-		"pct": func(v float64) string { return fmt.Sprintf("%.0f%%", 100*v) },
-		"dur": func(d time.Duration) string { return d.Round(time.Second).String() },
-		"ts":  func(t time.Time) string { return t.Format("2006-01-02 15:04:05") },
+		"f0":    func(v float64) string { return fmt.Sprintf("%.0f", v) },
+		"f1":    func(v float64) string { return fmt.Sprintf("%.1f", v) },
+		"f2":    func(v float64) string { return fmt.Sprintf("%.2f", v) },
+		"f3":    func(v float64) string { return fmt.Sprintf("%.3f", v) },
+		"dur":   func(d time.Duration) string { return d.Round(time.Second).String() },
+		"ts":    func(t time.Time) string { return t.Format("2006-01-02 15:04:05") },
 		"lower": strings.ToLower,
-		// unit conversions between arcsec and encoder ticks
 		"ticks": func(arcsec float64, cfg tcs.Config) float64 { return arcsec / cfg.ArcsecPerTick },
 		"arc":   func(ticks int, cfg tcs.Config) float64 { return float64(ticks) * cfg.ArcsecPerTick },
 		"arcf":  func(ticks float64, cfg tcs.Config) float64 { return ticks * cfg.ArcsecPerTick },
@@ -200,6 +223,17 @@ func (s *Server) problem(w http.ResponseWriter, r *http.Request, page string, d 
 	s.render(w, http.StatusUnprocessableEntity, page, "base", d)
 }
 
+// redirect sends the browser to url, using the htmx header for htmx
+// requests (a 302 would be swapped into the target instead of followed).
+func redirect(w http.ResponseWriter, r *http.Request, url string) {
+	if isHTMX(r) {
+		w.Header().Set("HX-Redirect", url)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Redirect(w, r, url, http.StatusSeeOther)
+}
+
 func (s *Server) fail(w http.ResponseWriter, err error) {
 	s.log.Error("request failed", "err", err)
 	http.Error(w, "internal error: "+err.Error(), http.StatusInternalServerError)
@@ -211,8 +245,8 @@ func isHTMX(r *http.Request) bool { return r.Header.Get("HX-Request") == "true" 
 const maxUpload = 32 << 20
 
 // saveUpload reads the form file, stores it by content hash under the data
-// directory, and returns the hash and original name.
-func (s *Server) saveUpload(r *http.Request, field string) (sha, name string, err error) {
+// directory and in the files table, and returns the hash and original name.
+func (s *Server) saveUpload(r *http.Request, field, kind string) (sha, name string, err error) {
 	r.Body = http.MaxBytesReader(nil, r.Body, maxUpload)
 	if err := r.ParseMultipartForm(maxUpload); err != nil {
 		return "", "", fmt.Errorf("upload too large or malformed: %w", err)
@@ -231,13 +265,17 @@ func (s *Server) saveUpload(r *http.Request, field string) (sha, name string, er
 	}
 	sum := sha256.Sum256(data)
 	sha = hex.EncodeToString(sum[:])
+	name = filepath.Base(hdr.Filename)
 	path := s.filePath(sha)
 	if _, err := os.Stat(path); err != nil {
 		if err := os.WriteFile(path, data, 0o644); err != nil {
 			return "", "", fmt.Errorf("saving upload: %w", err)
 		}
 	}
-	return sha, filepath.Base(hdr.Filename), nil
+	if err := s.st.EnsureFile(r.Context(), sha, kind, name, int64(len(data))); err != nil {
+		return "", "", err
+	}
+	return sha, name, nil
 }
 
 func (s *Server) filePath(sha string) string {

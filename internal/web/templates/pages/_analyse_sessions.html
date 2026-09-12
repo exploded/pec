@@ -1,5 +1,5 @@
 {{define "analyse/_sessions"}}{{with .Data}}
-<form class="card" hx-post="/analyse" hx-target="#result" hx-swap="innerHTML show:#result:top"
+<form class="card" hx-post="/analyse" hx-target="#run-error" hx-swap="innerHTML"
       hx-status:422="target:#run-error swap:innerHTML">
   <input type="hidden" name="file" value="{{.FileSHA}}">
   <input type="hidden" name="name" value="{{.FileName}}">
@@ -29,7 +29,18 @@
   </table>
   </div>
 
-  <details class="params" open>
+  <div class="grid" style="margin-top:1rem">
+    <label>Mount PEC during this run
+      <select name="pec_on">
+        <option value="">unknown</option>
+        <option value="off">off</option>
+        <option value="on">on</option>
+      </select>
+    </label>
+    <label class="wide">Notes <input type="text" name="notes" placeholder="seeing, wind, what changed…"></label>
+  </div>
+
+  <details class="params">
     <summary>Parameters</summary>
     <div class="grid">
       <label>Harmonics <input type="number" name="harmonics" value="{{.Params.Harmonics}}" min="1" max="12"></label>
@@ -54,7 +65,7 @@
     </div>
   </details>
   <div class="row">
-    <button type="submit" hx-disable="this">Analyse session</button>
+    <button type="submit" hx-disable="this">Analyse and save</button>
     <div id="run-error" class="slot inline"></div>
   </div>
 </form>

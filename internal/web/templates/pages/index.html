@@ -1,9 +1,39 @@
 {{template "base" .}}
 {{define "content"}}
-<h1>Periodic error, measured</h1>
-<p class="lede">Measure the RA periodic error of the mount from a PHD2 guide log, compare it with the
-PEC table stored in the Bisque TCS, and (later) fit a better table to paste in by hand.</p>
+<h1>Runs</h1>
+<p class="lede">Every analysis is kept here so nights can be compared. Pick a PEC-off run and a PEC-on run
+under <a href="/verify">Verify</a> for the verdict.</p>
 
+{{with .Data}}
+{{if .Runs}}
+<div class="card">
+<div class="scroll">
+<table class="runs">
+  <thead><tr><th>#</th><th>Analysed</th><th>Kind</th><th>Source</th><th>Session</th><th>Target</th><th>Alt</th><th>Pier</th><th>Period</th><th>Fundamental</th><th>Periodic RMS</th><th>Residual</th><th>PEC</th><th>Notes</th></tr></thead>
+  <tbody>
+  {{range .Runs}}
+  <tr>
+    <td><a href="/runs/{{.ID}}">{{.ID}}</a></td>
+    <td class="mono">{{.When}}</td>
+    <td>{{if eq .Kind "table"}}TCS table{{else}}guide log{{end}}</td>
+    <td class="trunc" title="{{.SourceName}}">{{.SourceName}}</td>
+    <td>{{if eq .Kind "analyse"}}{{.SessionIndex}} · <span class="mono">{{.Begins}}</span>{{end}}</td>
+    <td class="mono">{{if eq .Kind "analyse"}}{{f2 .RaHours}} h / {{f1 .DecDeg}}°{{end}}</td>
+    <td>{{if eq .Kind "analyse"}}{{f1 .AltDeg}}°{{end}}</td>
+    <td>{{.PierSide}}</td>
+    <td>{{if eq .Kind "analyse"}}{{f1 .PeriodS}} s{{if .PeriodSigmaS}} ± {{f1 .PeriodSigmaS}}{{end}}{{end}}</td>
+    <td>{{f3 .Amp1Arcsec}}″</td>
+    <td>{{f2 .PeriodicRms}}″</td>
+    <td>{{if eq .Kind "analyse"}}{{f2 .ResidualRms}}″{{end}}</td>
+    <td>{{.PecText}}</td>
+    <td class="trunc" title="{{.Notes}}">{{.Notes}}</td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+</div>
+{{else}}
 <div class="cards">
   <a class="card link" href="/analyse">
     <h2>Analyse a guide log</h2>
@@ -15,12 +45,7 @@ PEC table stored in the Bisque TCS, and (later) fit a better table to paste in b
     <p>Upload the table copied out of the Bisque TCS window and see its harmonics in the same
     units, so a stored curve and a fresh measurement compare directly.</p>
   </a>
-  <div class="card muted">
-    <h2>Coming next</h2>
-    <p>Milestone 2 stores every run in a local database, draws the charts, and adds
-    <strong>Verify</strong> (PEC off vs on with a plain verdict). Milestone 3 adds
-    <strong>Fit</strong>, which writes a paste-ready table. Milestone 4 reads the PEC index off the
-    TCS window to sync the phase.</p>
-  </div>
 </div>
+{{end}}
+{{end}}
 {{end}}

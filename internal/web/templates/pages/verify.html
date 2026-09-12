@@ -1,0 +1,42 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>Verify PEC</h1>
+<p class="lede">Pick a run made with PEC off and one made with PEC on. The after run is re-fitted at the
+before run's worm period and the fundamental amplitudes are compared. The verdict is deliberately
+blunt: helping, no difference, or inverted.</p>
+
+{{with .Data}}
+{{if .Runs}}
+<form class="card" hx-post="/verify" hx-target="#verify-result" hx-swap="innerHTML show:#verify-result:top"
+      hx-status:422="target:#verify-error swap:innerHTML">
+  <div class="scroll">
+  <table class="runs">
+    <thead><tr><th>Before</th><th>After</th><th>#</th><th>Session</th><th>Target</th><th>Fundamental</th><th>Period</th><th>PEC</th><th>Notes</th></tr></thead>
+    <tbody>
+    {{range .Runs}}
+    <tr>
+      <td><input type="radio" name="before" value="{{.ID}}" {{if eq $.Data.Before .ID}}checked{{end}}></td>
+      <td><input type="radio" name="after" value="{{.ID}}" {{if eq $.Data.After .ID}}checked{{end}}></td>
+      <td><a href="/runs/{{.ID}}">{{.ID}}</a></td>
+      <td>{{.SessionIndex}} · <span class="mono">{{.Begins}}</span></td>
+      <td class="mono">{{f2 .RaHours}} h / {{f1 .DecDeg}}°</td>
+      <td>{{f3 .Amp1Arcsec}}″</td>
+      <td>{{f1 .PeriodS}} s</td>
+      <td>{{.PecText}}</td>
+      <td class="trunc" title="{{.Notes}}">{{.Notes}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  <div class="row">
+    <button type="submit" hx-disable="this">Compare</button>
+    <div id="verify-error" class="slot inline"></div>
+  </div>
+</form>
+{{else}}
+<div class="card muted"><p>No guide-log runs yet. <a href="/analyse">Analyse a log</a> with PEC off, then another with PEC on.</p></div>
+{{end}}
+<div id="verify-result" class="slot">{{if .Body}}{{template "verify/_result" $}}{{end}}</div>
+{{end}}
+{{end}}

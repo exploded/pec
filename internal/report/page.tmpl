@@ -1,0 +1,23 @@
+{{define "page"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{.Title}} · pec</title>
+<style>
+{{.CSS}}
+* { box-sizing: border-box }
+body { margin: 0; background: var(--plane); color: var(--text-primary); font: 14px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased }
+.wrap { max-width: 1000px; margin: 0 auto; padding: 32px 20px 56px }
+h1 { font-size: 22px; line-height: 1.25; margin: 0 0 4px; letter-spacing: -.01em }
+.meta { color: var(--muted); font-size: 12.5px; margin: 0 0 20px }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>{{.Title}}</h1>
+  <p class="meta">{{.Subtitle}} · generated {{.Generated.Format "2006-01-02 15:04"}} by pec {{.Version}}</p>
+  {{template "report-body" .}}
+</div>
+</body>
+</html>{{end}}

@@ -14,22 +14,30 @@ go build -o pec.exe ./cmd/pec
 pec.exe serve
 ```
 
-Open http://127.0.0.1:8990/. Flags: `-addr`, `-data` (uploads directory, default `./data`),
-`-tz` (zone the PHD2 logs were written in, default the machine's local zone).
+Open http://127.0.0.1:8990/. Flags: `-addr`, `-db` (history database, default `pec.db`),
+`-data` (uploads directory, default `./data`), `-tz` (zone the PHD2 logs were written in,
+default the machine's local zone).
 
-## What it does today (milestone 1)
+## What it does today (milestones 1 and 2)
 
 - **Analyse log**: upload a PHD2 guide log, pick a session, get the fitted worm period with its
   uncertainty, the amplitude and phase of each harmonic, the drift rate, and the RMS before and
-  after removing the fitted curve. Warns when PHD2 was guiding (which suppresses the signal),
-  when the run is shorter than three worm cycles, and when the cadence is too coarse for the
-  requested harmonics.
+  after removing the fitted curve, with charts: the samples folded at the worm period with the
+  fitted curve, the residual over time, the harmonic amplitudes, and the period scan. Warns when
+  PHD2 was guiding (which suppresses the signal), when the run is shorter than three worm cycles,
+  and when the cadence is too coarse for the requested harmonics.
 - **TCS table**: upload the table copied from the Bisque TCS window and get the same harmonic
-  breakdown in the same units.
+  breakdown in the same units, with the table and its reconstruction drawn together.
+- **Runs**: every analysis is saved to `pec.db` with the target, altitude, pier side, period,
+  harmonics and residual, plus your note of whether mount PEC was on. Each run page has a
+  self-contained HTML report to download.
+- **Verify**: pick a PEC-off run and a PEC-on run. The after run is re-fitted at the before
+  run's period and the fundamental amplitudes compared, with a blunt verdict: helping, no
+  difference, worse, inverted (every harmonic doubled) or half a cycle out of phase (even
+  harmonics cancelled).
 
-Coming: charts and a local history database with a PEC-off / PEC-on verdict (milestone 2), a
-paste-ready table writer with phase reference (milestone 3), and a screen watcher that reads
-the PEC index off the TCS window to sync the phase (milestone 4).
+Coming: a paste-ready table writer with phase reference (milestone 3), and a screen watcher
+that reads the PEC index off the TCS window to sync the phase (milestone 4).
 
 ## Method
 

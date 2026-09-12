@@ -22,6 +22,7 @@ import (
 
 	_ "time/tzdata"
 
+	"github.com/exploded/pec/internal/store"
 	"github.com/exploded/pec/internal/web"
 )
 
@@ -33,13 +34,13 @@ func main() {
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	addr := fs.String("addr", "127.0.0.1:8990", "listen address (keep it on loopback)")
 	dataDir := fs.String("data", "data", "directory for uploaded files")
+	dbPath := fs.String("db", "pec.db", "SQLite history database")
 	tz := fs.String("tz", "Local", "time zone the PHD2 logs were written in (IANA name or Local)")
-	_ = fs.String("db", "pec.db", "SQLite database path (milestone 2)")
 	_ = fs.Parse(os.Args[2:])
 
 	switch cmd {
 	case "serve":
-		if err := serve(*addr, *dataDir, *tz); err != nil {
+		if err := serve(*addr, *dataDir, *dbPath, *tz); err != nil {
 			fmt.Fprintln(os.Stderr, "pec:", err)
 			os.Exit(1)
 		}
@@ -55,7 +56,7 @@ func usage() {
 	os.Exit(2)
 }
 
-func serve(addr, dataDir, tz string) error {
+func serve(addr, dataDir, dbPath, tz string) error {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	loc := time.Local
 	if tz != "" && tz != "Local" {
@@ -64,7 +65,12 @@ func serve(addr, dataDir, tz string) error {
 			return fmt.Errorf("time zone %q: %w", tz, err)
 		}
 	}
-	srv, err := web.New(web.Options{DataDir: dataDir, Loc: loc, Version: version()}, logger)
+	st, err := store.Open(dbPath)
+	if err != nil {
+		return fmt.Errorf("database %s: %w", dbPath, err)
+	}
+	defer st.Close()
+	srv, err := web.New(web.Options{DataDir: dataDir, Loc: loc, Version: version(), Store: st}, logger)
 	if err != nil {
 		return err
 	}
@@ -73,7 +79,7 @@ func serve(addr, dataDir, tz string) error {
 	defer stop()
 	errc := make(chan error, 1)
 	go func() {
-		logger.Info("pec listening", "url", "http://"+addr+"/", "version", version(), "tz", loc.String())
+		logger.Info("pec listening", "url", "http://"+addr+"/", "version", version(), "tz", loc.String(), "db", dbPath)
 		if err := hs.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errc <- err
 		}

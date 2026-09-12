@@ -2,7 +2,8 @@
 {{define "content"}}
 <h1>Analyse a guide log</h1>
 <p class="lede">Upload a PHD2 guide log. Sessions are listed with what PHD2 was doing; a Guiding
-Assistant run (no corrections sent) is the intended input for a periodic-error measurement.</p>
+Assistant run (no corrections sent) is the intended input for a periodic-error measurement.
+The result is saved and opens on its own page.</p>
 
 <form class="card" hx-post="/analyse/upload" hx-encoding="multipart/form-data"
       hx-target="#sessions" hx-swap="innerHTML" hx-status:422="target:#upload-error swap:innerHTML">
@@ -16,5 +17,4 @@ Assistant run (no corrections sent) is the intended input for a periodic-error m
 </form>
 
 <div id="sessions" class="slot">{{with .Data}}{{if .Sessions}}{{template "analyse/_sessions" $}}{{end}}{{end}}</div>
-<div id="result" class="slot">{{with .Data}}{{if .Result}}{{template "analyse/_result" $}}{{end}}{{end}}</div>
 {{end}}

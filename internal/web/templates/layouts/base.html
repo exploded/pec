@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{if .Title}}{{.Title}} · pec{{else}}pec{{end}}</title>
+  <link rel="stylesheet" href="/report.css">
   <link rel="stylesheet" href="/static/css/app.css">
   <meta name="htmx-config" content='{"noSwap": [204, 304, "5xx"]}'>
   <script src="/static/js/htmx.min.js" defer></script>
@@ -15,6 +16,16 @@
     {{block "content" .}}{{end}}
   </main>
   <footer>pec {{.Version}} · reads files, writes files, never touches the mount</footer>
+  <div id="toast" aria-live="polite"></div>
+  <script>
+    document.body.addEventListener("showToast", e => {
+      const el = document.createElement("div");
+      el.className = "toast";
+      el.textContent = e.detail.msg;
+      document.getElementById("toast").appendChild(el);
+      setTimeout(() => el.remove(), 2500);
+    });
+  </script>
 </body>
 </html>{{end}}
 
