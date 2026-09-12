@@ -7,6 +7,7 @@ package analysis
 import (
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/exploded/pec/internal/pe"
@@ -75,12 +76,15 @@ func (p Params) fitOptions() pe.FitOptions {
 
 // SessionResult is a fitted PHD2 session.
 type SessionResult struct {
-	Session  *phd2.Session
-	Params   Params
-	Fit      *pe.Result
-	Used     int // samples handed to the fitter
-	Guiding  phd2.GuidingState
-	Warnings []string // policy warnings (guiding active, skipped rows) followed by fit warnings
+	Session *phd2.Session
+	Params  Params
+	Fit     *pe.Result
+	Used    int // samples handed to the fitter
+	Guiding phd2.GuidingState
+	// DecFactor is 1/cos(Dec): the sky-to-axis scaling applied to every
+	// sample, so all amplitudes are RA-axis arcseconds.
+	DecFactor float64
+	Warnings  []string // policy warnings (guiding active, skipped rows) followed by fit warnings
 }
 
 // Session fits one session.
@@ -95,19 +99,39 @@ func Session(s *phd2.Session, p Params) (*SessionResult, error) {
 	if len(rows) < 10 {
 		return nil, fmt.Errorf("only %d usable samples in this session", len(rows))
 	}
-	samples := make([]pe.Sample, len(rows))
-	for i, r := range rows {
-		samples[i] = pe.Sample{T: r.Offset, V: p.RASign * r.RARaw * s.PixelScale}
+	samples, factor := sessionSamples(s, p)
+	if factor > 4 {
+		warnings = append(warnings, fmt.Sprintf("Dec %.1f° is close to the pole: sky errors are scaled by 1/cos(Dec) = %.1f, which amplifies seeing as much as the signal", s.DecDeg, factor))
 	}
 	fit, err := pe.Fit(samples, s.Breaks(), p.fitOptions())
 	if err != nil {
 		return nil, err
 	}
 	res := &SessionResult{
-		Session: s, Params: p, Fit: fit, Used: len(rows), Guiding: s.Guiding(),
+		Session: s, Params: p, Fit: fit, Used: len(rows), Guiding: s.Guiding(), DecFactor: factor,
 		Warnings: append(warnings, fit.Warnings...),
 	}
 	return res, nil
+}
+
+// sessionSamples converts the measurement rows to RA-axis arcseconds:
+//
+//	V = RASign * RARawDistance_px * PixelScale / cos(Dec)
+//
+// PHD2 measures motion on the sky, where an RA-axis error appears
+// foreshortened by cos(Dec); the PEC table is in axis units, so the sky
+// error is scaled back up. The factor is returned for the record.
+func sessionSamples(s *phd2.Session, p Params) ([]pe.Sample, float64) {
+	rows, _ := s.MeasurementSamples()
+	factor := 1.0
+	if c := math.Cos(s.DecDeg * math.Pi / 180); c > 0.01 {
+		factor = 1 / c
+	}
+	samples := make([]pe.Sample, len(rows))
+	for i, r := range rows {
+		samples[i] = pe.Sample{T: r.Offset, V: p.RASign * r.RARaw * s.PixelScale * factor}
+	}
+	return samples, factor
 }
 
 // TableResult is the harmonic breakdown of a stored PEC table.

@@ -111,6 +111,9 @@ synthetic capture for tests; the real capture lives in `.local/cpature.pcapng` (
 - The synthetic round-trip suite (`internal/pe/fit_test.go`) is the gate: 2 % amplitude and
   2 degrees phase at low noise.
 - `phd2.RASign` is the only RA sign in the code base.
+- Every guide-log amplitude is in RA-axis arcseconds: `analysis.sessionSamples` divides the PHD2
+  sky error by cos(Dec) (PHD2 sees the axis error foreshortened; the table is in axis units).
+  Verify ratios are unaffected; index-mode tables would otherwise be low by cos(Dec).
 
 ## Gotchas
 

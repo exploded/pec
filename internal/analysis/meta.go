@@ -55,6 +55,7 @@ type MetaSession struct {
 	Begins     time.Time `json:"begins"`
 	ExposureMS int       `json:"exposure_ms"`
 	PixelScale float64   `json:"pixel_scale"`
+	DecFactor  float64   `json:"dec_factor"` // 1/cos(Dec) applied to sky errors
 	Samples    int       `json:"samples_used"`
 	Target     string    `json:"target"`
 }
@@ -145,7 +146,7 @@ func (r *FitResult) Meta(info MetaInfo) Meta {
 		if r.Session != nil {
 			m.RASign = r.Session.Params.RASign
 		}
-		m.Sign = fmt.Sprintf("table = -(measured error), error = ra_sign(%+.0f) x PHD2 RARawDistance x pixel scale, %s", m.RASign, inv)
+		m.Sign = fmt.Sprintf("table = -(measured error), error = ra_sign(%+.0f) x PHD2 RARawDistance x pixel scale / cos(Dec), %s", m.RASign, inv)
 		if r.Anchor != nil {
 			m.PhaseRef.Index = r.Anchor.Index
 			m.PhaseRef.SigmaS = r.Anchor.sigma()
@@ -168,7 +169,7 @@ func (r *FitResult) Meta(info MetaInfo) Meta {
 			m.Analysis = &ap
 			m.Session = &MetaSession{
 				Index: s.Index, Begins: s.Begins, ExposureMS: s.ExposureMS, PixelScale: s.PixelScale,
-				Samples: r.Fit.N,
+				DecFactor: r.Session.DecFactor, Samples: r.Fit.N,
 				Target:  fmt.Sprintf("RA %.2f h, Dec %.1f deg, HA %.2f h, alt %.1f deg, pier %s", s.RAHours, s.DecDeg, s.HourAngle, s.AltDeg, s.PierSide),
 			}
 		}

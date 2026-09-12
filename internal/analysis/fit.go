@@ -261,11 +261,7 @@ func FitIndex(in IndexInput, p FitParams) (*FitResult, error) {
 // period from the parameters, the anchor or the run in that order.
 func FitSession(res *SessionResult, a Anchor, p FitParams) (*FitResult, error) {
 	s := res.Session
-	rows, _ := s.MeasurementSamples()
-	samples := make([]pe.Sample, len(rows))
-	for i, r := range rows {
-		samples[i] = pe.Sample{T: r.Offset, V: res.Params.RASign * r.RARaw * s.PixelScale}
-	}
+	samples, _ := sessionSamples(s, res.Params)
 	in := IndexInput{
 		Samples: samples, Breaks: s.Breaks(), Index: a.Index, AnchorSigma: a.sigma(),
 		AnchorOffset: a.At.Sub(s.Begins).Seconds(),

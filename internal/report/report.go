@@ -234,6 +234,7 @@ func sessionSource(res *analysis.SessionResult, name string) []Stat {
 		{K: "Capture", V: fmt.Sprintf("%.2f″/px · bin %d · exposure %d ms · %s", s.PixelScale, s.Binning, s.ExposureMS, s.Camera)},
 		{K: "Rows used", V: fmt.Sprintf("%d of %d", res.Used, len(s.Samples)) + guidingNote(res)},
 		{K: "Options", V: fmt.Sprintf("%d harmonics · drift order %d · exclude %.0f s after dithers · min segment %d · RA sign %+.0f", p.Harmonics, p.PolyOrder, p.ExcludeAfter, p.MinSegment, p.RASign)},
+		{K: "Units", V: fmt.Sprintf("RA-axis arcseconds: sky error × 1/cos(Dec %.1f°) = × %.3f", s.DecDeg, res.DecFactor)},
 	}
 	if len(res.Fit.Offsets) > 1 {
 		v := ""
@@ -300,7 +301,7 @@ func foldChart(f *pe.Result, title, colPts, colCurve string) Chart {
 		{Label: "fit", Color: colCurve, Pts: curve},
 	}, Axes{
 		H: 300, XMin: 0, XMax: 1, XTicks: 4, YTicks: 4, ZeroLine: true,
-		YLabel: "RA error, arcsec (drift removed)", XLabel: "worm phase",
+		YLabel: "RA axis error, arcsec (drift removed)", XLabel: "worm phase",
 		XFmt: func(v float64) string { return fmt.Sprintf("%.2f", v) },
 		YFmt: func(v float64) string { return fmt.Sprintf("%.1f", v) },
 	})
@@ -643,7 +644,7 @@ func indexFoldChart(r *analysis.FitResult) Chart {
 		{Label: "fit", Color: colFitted, Pts: curve},
 	}, Axes{
 		H: 300, XMin: 0, XMax: n, XTicks: 5, YTicks: 4, ZeroLine: true,
-		YLabel: "RA error, arcsec (drift removed)", XLabel: "table index",
+		YLabel: "RA axis error, arcsec (drift removed)", XLabel: "table index",
 		XFmt: func(v float64) string { return fmt.Sprintf("%.0f", v) },
 		YFmt: func(v float64) string { return fmt.Sprintf("%.1f", v) },
 	})
@@ -741,7 +742,7 @@ func fitSource(r *analysis.FitResult, name string, loc *time.Location) []Stat {
 		if r.Session != nil {
 			raSign = r.Session.Params.RASign
 		}
-		out = append(out, Stat{K: "Sign", V: fmt.Sprintf("table = −(measured error); error = %+.0f × PHD2 RARawDistance × pixel scale", raSign)})
+		out = append(out, Stat{K: "Sign", V: fmt.Sprintf("table = −(measured error); error = %+.0f × PHD2 RARawDistance × pixel scale ÷ cos(Dec)", raSign)})
 	}
 	return out
 }
