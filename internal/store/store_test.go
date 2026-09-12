@@ -2,13 +2,16 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"math"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/exploded/pec/internal/analysis"
 	"github.com/exploded/pec/internal/phd2"
+	"github.com/exploded/pec/internal/tcs"
 )
 
 func TestStoreRoundTrip(t *testing.T) {
@@ -90,4 +93,74 @@ func TestStoreRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	s2.Close()
+}
+
+func TestAnchorsAndFits(t *testing.T) {
+	ctx := context.Background()
+	s, err := Open(filepath.Join(t.TempDir(), "pec.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	loc, _ := time.LoadLocation("Australia/Melbourne")
+	at := time.Date(2026, 9, 12, 21, 3, 4, 500e6, loc)
+	aid, err := s.SaveAnchor(ctx, analysis.Anchor{Index: 512, At: at}, "", "typed from TCS")
+	if err != nil {
+		t.Fatal(err)
+	}
+	row, err := s.Q.GetAnchor(ctx, aid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := AnchorFromRow(row)
+	if err != nil || a.Index != 512 || !a.At.Equal(at) || a.SigmaS != analysis.DefaultAnchorSigma || row.Source != "typed" {
+		t.Errorf("anchor round trip: %v %+v %+v", err, a, row)
+	}
+
+	tbl, err := tcs.ReadFile("../../testdata/PEC_table_TCS_2026-09-12.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fr, err := analysis.FitTable(tbl, analysis.DefaultFitParams())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.EnsureFile(ctx, "def", "tcs", "table.txt", 10); err != nil {
+		t.Fatal(err)
+	}
+	meta := fr.Meta(analysis.MetaInfo{Version: "t", SourceName: "table.txt", SourceSHA: "def"})
+	fid, err := s.SaveFit(ctx, fr, meta, FitSaveMeta{FileSHA: "def", SourceName: "table.txt", PhaseRef: "tcs: table.txt", Version: "t", AnchorID: aid})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := s.Q.GetFit(ctx, fid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Mode != "tcs" || f.P2pTicks != int64(fr.Stats.P2P) || f.RunID.Valid || f.AnchorID.Int64 != aid {
+		t.Errorf("fit row %+v", f)
+	}
+	back, err := tcs.Read(strings.NewReader(f.TableText))
+	if err != nil || len(back.Values) != 1250 || back.Values[100] != fr.Table.Values[100] {
+		t.Errorf("table text round trip: %v", err)
+	}
+	var m analysis.Meta
+	if err := json.Unmarshal([]byte(f.MetaJson), &m); err != nil || m.Mode != "tcs" || m.Entries != 1250 {
+		t.Errorf("meta round trip: %v %+v", err, m)
+	}
+	// Deleting the anchor leaves the fit with a NULL anchor (ON DELETE SET NULL).
+	if err := s.Q.DeleteAnchor(ctx, aid); err != nil {
+		t.Fatal(err)
+	}
+	f, _ = s.Q.GetFit(ctx, fid)
+	if f.AnchorID.Valid {
+		t.Error("anchor id should be NULL after the anchor is deleted")
+	}
+	if list, _ := s.Q.ListFits(ctx, 10); len(list) != 1 {
+		t.Errorf("fits %d", len(list))
+	}
+	if err := s.Q.DeleteFit(ctx, fid); err != nil {
+		t.Fatal(err)
+	}
 }

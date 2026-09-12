@@ -78,7 +78,7 @@ type SessionResult struct {
 	Session  *phd2.Session
 	Params   Params
 	Fit      *pe.Result
-	Used     int      // samples handed to the fitter
+	Used     int // samples handed to the fitter
 	Guiding  phd2.GuidingState
 	Warnings []string // policy warnings (guiding active, skipped rows) followed by fit warnings
 }

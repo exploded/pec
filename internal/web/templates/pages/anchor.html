@@ -1,0 +1,33 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>Anchor the PEC index</h1>
+<p class="lede">The mount replays its table against an index the Bisque TCS window shows live but does not
+expose to software. Watch it, type the value you are about to see, and press the button the instant the
+display reads it. The server stamps the time. Reaction time is about 2 s, or 5° of phase; the Fit page
+carries that into its phase-error budget. Tracking must stay on between the anchor and the run it is
+used with.</p>
+
+{{with .Data}}
+<form class="card" hx-post="/anchor" hx-target="#anchors" hx-swap="innerHTML"
+      hx-status:422="target:#anchor-error swap:innerHTML">
+  <div class="grid">
+    <label>PEC index (0 to {{.Entries}} − 1) <input type="number" name="index" min="0" max="{{.Entries}}" required autofocus inputmode="numeric"></label>
+    <label>Timing uncertainty (s) <input type="number" name="sigma" value="{{f1 .Sigma}}" step="0.5" min="0.1"></label>
+    <label class="wide">Note <input type="text" name="note" placeholder="e.g. TCS window, tracking sidereal, PEC off"></label>
+  </div>
+  <details class="params">
+    <summary>Enter the time by hand instead</summary>
+    <div class="grid">
+      <label>Seen at (local time) <input type="datetime-local" name="at" step="1"></label>
+    </div>
+    <p class="small">Leave empty to stamp the moment the button is pressed.</p>
+  </details>
+  <div class="row">
+    <button type="submit" hx-disable="this">Reading this index now</button>
+    <div id="anchor-error" class="slot inline"></div>
+  </div>
+</form>
+
+<div id="anchors" class="slot">{{template "anchor/_list" $}}</div>
+{{end}}
+{{end}}

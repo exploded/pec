@@ -10,6 +10,24 @@ import (
 	"database/sql"
 )
 
+const deleteAnchor = `-- name: DeleteAnchor :exec
+DELETE FROM anchors WHERE id = ?
+`
+
+func (q *Queries) DeleteAnchor(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteAnchor, id)
+	return err
+}
+
+const deleteFit = `-- name: DeleteFit :exec
+DELETE FROM fits WHERE id = ?
+`
+
+func (q *Queries) DeleteFit(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteFit, id)
+	return err
+}
+
 const deleteRun = `-- name: DeleteRun :exec
 DELETE FROM runs WHERE id = ?
 `
@@ -17,6 +35,28 @@ DELETE FROM runs WHERE id = ?
 func (q *Queries) DeleteRun(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, deleteRun, id)
 	return err
+}
+
+const getAnchor = `-- name: GetAnchor :one
+SELECT id, created_at, pec_index, at, sigma_s, source, period_s, period_sigma_s, readings, note FROM anchors WHERE id = ?
+`
+
+func (q *Queries) GetAnchor(ctx context.Context, id int64) (Anchor, error) {
+	row := q.db.QueryRowContext(ctx, getAnchor, id)
+	var i Anchor
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.PecIndex,
+		&i.At,
+		&i.SigmaS,
+		&i.Source,
+		&i.PeriodS,
+		&i.PeriodSigmaS,
+		&i.Readings,
+		&i.Note,
+	)
+	return i, err
 }
 
 const getFile = `-- name: GetFile :one
@@ -32,6 +72,38 @@ func (q *Queries) GetFile(ctx context.Context, sha256 string) (File, error) {
 		&i.Name,
 		&i.Size,
 		&i.UploadedAt,
+	)
+	return i, err
+}
+
+const getFit = `-- name: GetFit :one
+SELECT id, created_at, mode, run_id, anchor_id, file_sha256, source_name, phase_ref, period_s, harmonics, inverted, amp1_arcsec, p2p_ticks, quant_rms, phase_err_deg, table_text, meta_json, warnings_json, tool_version, notes FROM fits WHERE id = ?
+`
+
+func (q *Queries) GetFit(ctx context.Context, id int64) (Fit, error) {
+	row := q.db.QueryRowContext(ctx, getFit, id)
+	var i Fit
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.Mode,
+		&i.RunID,
+		&i.AnchorID,
+		&i.FileSha256,
+		&i.SourceName,
+		&i.PhaseRef,
+		&i.PeriodS,
+		&i.Harmonics,
+		&i.Inverted,
+		&i.Amp1Arcsec,
+		&i.P2pTicks,
+		&i.QuantRms,
+		&i.PhaseErrDeg,
+		&i.TableText,
+		&i.MetaJson,
+		&i.WarningsJson,
+		&i.ToolVersion,
+		&i.Notes,
 	)
 	return i, err
 }
@@ -82,6 +154,95 @@ func (q *Queries) GetRun(ctx context.Context, id int64) (Run, error) {
 		&i.Notes,
 	)
 	return i, err
+}
+
+const insertAnchor = `-- name: InsertAnchor :execresult
+INSERT INTO anchors (created_at, pec_index, at, sigma_s, source, period_s, period_sigma_s, readings, note)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+`
+
+type InsertAnchorParams struct {
+	CreatedAt    string  `json:"created_at"`
+	PecIndex     int64   `json:"pec_index"`
+	At           string  `json:"at"`
+	SigmaS       float64 `json:"sigma_s"`
+	Source       string  `json:"source"`
+	PeriodS      float64 `json:"period_s"`
+	PeriodSigmaS float64 `json:"period_sigma_s"`
+	Readings     int64   `json:"readings"`
+	Note         string  `json:"note"`
+}
+
+func (q *Queries) InsertAnchor(ctx context.Context, arg InsertAnchorParams) (sql.Result, error) {
+	return q.db.ExecContext(ctx, insertAnchor,
+		arg.CreatedAt,
+		arg.PecIndex,
+		arg.At,
+		arg.SigmaS,
+		arg.Source,
+		arg.PeriodS,
+		arg.PeriodSigmaS,
+		arg.Readings,
+		arg.Note,
+	)
+}
+
+const insertFit = `-- name: InsertFit :execresult
+INSERT INTO fits (
+    created_at, mode, run_id, anchor_id, file_sha256, source_name, phase_ref,
+    period_s, harmonics, inverted, amp1_arcsec, p2p_ticks, quant_rms, phase_err_deg,
+    table_text, meta_json, warnings_json, tool_version, notes
+) VALUES (
+    ?, ?, ?, ?, ?, ?, ?,
+    ?, ?, ?, ?, ?, ?, ?,
+    ?, ?, ?, ?, ?
+)
+`
+
+type InsertFitParams struct {
+	CreatedAt    string        `json:"created_at"`
+	Mode         string        `json:"mode"`
+	RunID        sql.NullInt64 `json:"run_id"`
+	AnchorID     sql.NullInt64 `json:"anchor_id"`
+	FileSha256   string        `json:"file_sha256"`
+	SourceName   string        `json:"source_name"`
+	PhaseRef     string        `json:"phase_ref"`
+	PeriodS      float64       `json:"period_s"`
+	Harmonics    int64         `json:"harmonics"`
+	Inverted     int64         `json:"inverted"`
+	Amp1Arcsec   float64       `json:"amp1_arcsec"`
+	P2pTicks     int64         `json:"p2p_ticks"`
+	QuantRms     float64       `json:"quant_rms"`
+	PhaseErrDeg  float64       `json:"phase_err_deg"`
+	TableText    string        `json:"table_text"`
+	MetaJson     string        `json:"meta_json"`
+	WarningsJson string        `json:"warnings_json"`
+	ToolVersion  string        `json:"tool_version"`
+	Notes        string        `json:"notes"`
+}
+
+func (q *Queries) InsertFit(ctx context.Context, arg InsertFitParams) (sql.Result, error) {
+	return q.db.ExecContext(ctx, insertFit,
+		arg.CreatedAt,
+		arg.Mode,
+		arg.RunID,
+		arg.AnchorID,
+		arg.FileSha256,
+		arg.SourceName,
+		arg.PhaseRef,
+		arg.PeriodS,
+		arg.Harmonics,
+		arg.Inverted,
+		arg.Amp1Arcsec,
+		arg.P2pTicks,
+		arg.QuantRms,
+		arg.PhaseErrDeg,
+		arg.TableText,
+		arg.MetaJson,
+		arg.WarningsJson,
+		arg.ToolVersion,
+		arg.Notes,
+	)
 }
 
 const insertRun = `-- name: InsertRun :execresult
@@ -244,6 +405,92 @@ func (q *Queries) ListAnalyseRuns(ctx context.Context, limit int64) ([]Run, erro
 	return items, nil
 }
 
+const listAnchors = `-- name: ListAnchors :many
+SELECT id, created_at, pec_index, at, sigma_s, source, period_s, period_sigma_s, readings, note FROM anchors ORDER BY at DESC, id DESC LIMIT ?
+`
+
+func (q *Queries) ListAnchors(ctx context.Context, limit int64) ([]Anchor, error) {
+	rows, err := q.db.QueryContext(ctx, listAnchors, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Anchor{}
+	for rows.Next() {
+		var i Anchor
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.PecIndex,
+			&i.At,
+			&i.SigmaS,
+			&i.Source,
+			&i.PeriodS,
+			&i.PeriodSigmaS,
+			&i.Readings,
+			&i.Note,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFits = `-- name: ListFits :many
+SELECT id, created_at, mode, run_id, anchor_id, file_sha256, source_name, phase_ref, period_s, harmonics, inverted, amp1_arcsec, p2p_ticks, quant_rms, phase_err_deg, table_text, meta_json, warnings_json, tool_version, notes FROM fits ORDER BY created_at DESC, id DESC LIMIT ?
+`
+
+func (q *Queries) ListFits(ctx context.Context, limit int64) ([]Fit, error) {
+	rows, err := q.db.QueryContext(ctx, listFits, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Fit{}
+	for rows.Next() {
+		var i Fit
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.Mode,
+			&i.RunID,
+			&i.AnchorID,
+			&i.FileSha256,
+			&i.SourceName,
+			&i.PhaseRef,
+			&i.PeriodS,
+			&i.Harmonics,
+			&i.Inverted,
+			&i.Amp1Arcsec,
+			&i.P2pTicks,
+			&i.QuantRms,
+			&i.PhaseErrDeg,
+			&i.TableText,
+			&i.MetaJson,
+			&i.WarningsJson,
+			&i.ToolVersion,
+			&i.Notes,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRuns = `-- name: ListRuns :many
 SELECT id, created_at, kind, file_sha256, source_name, session_index, session_begins, equipment, ra_hours, dec_deg, hour_angle, alt_deg, pier_side, pixel_scale, exposure_ms, sample_count, cadence_s, span_s, cycles, drift_arcsec_min, period_s, period_sigma_s, period_fixed, harmonics_json, amp1_arcsec, phase1_deg, periodic_rms, residual_rms, peak_to_peak, guiding_active, pec_on, ra_sign, options_json, warnings_json, tool_version, notes FROM runs ORDER BY created_at DESC, id DESC LIMIT ?
 `
@@ -306,6 +553,84 @@ func (q *Queries) ListRuns(ctx context.Context, limit int64) ([]Run, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const listTableRuns = `-- name: ListTableRuns :many
+SELECT id, created_at, kind, file_sha256, source_name, session_index, session_begins, equipment, ra_hours, dec_deg, hour_angle, alt_deg, pier_side, pixel_scale, exposure_ms, sample_count, cadence_s, span_s, cycles, drift_arcsec_min, period_s, period_sigma_s, period_fixed, harmonics_json, amp1_arcsec, phase1_deg, periodic_rms, residual_rms, peak_to_peak, guiding_active, pec_on, ra_sign, options_json, warnings_json, tool_version, notes FROM runs WHERE kind = 'table' ORDER BY created_at DESC, id DESC LIMIT ?
+`
+
+func (q *Queries) ListTableRuns(ctx context.Context, limit int64) ([]Run, error) {
+	rows, err := q.db.QueryContext(ctx, listTableRuns, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Run{}
+	for rows.Next() {
+		var i Run
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.Kind,
+			&i.FileSha256,
+			&i.SourceName,
+			&i.SessionIndex,
+			&i.SessionBegins,
+			&i.Equipment,
+			&i.RaHours,
+			&i.DecDeg,
+			&i.HourAngle,
+			&i.AltDeg,
+			&i.PierSide,
+			&i.PixelScale,
+			&i.ExposureMs,
+			&i.SampleCount,
+			&i.CadenceS,
+			&i.SpanS,
+			&i.Cycles,
+			&i.DriftArcsecMin,
+			&i.PeriodS,
+			&i.PeriodSigmaS,
+			&i.PeriodFixed,
+			&i.HarmonicsJson,
+			&i.Amp1Arcsec,
+			&i.Phase1Deg,
+			&i.PeriodicRms,
+			&i.ResidualRms,
+			&i.PeakToPeak,
+			&i.GuidingActive,
+			&i.PecOn,
+			&i.RaSign,
+			&i.OptionsJson,
+			&i.WarningsJson,
+			&i.ToolVersion,
+			&i.Notes,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateFitNotes = `-- name: UpdateFitNotes :exec
+UPDATE fits SET notes = ? WHERE id = ?
+`
+
+type UpdateFitNotesParams struct {
+	Notes string `json:"notes"`
+	ID    int64  `json:"id"`
+}
+
+func (q *Queries) UpdateFitNotes(ctx context.Context, arg UpdateFitNotesParams) error {
+	_, err := q.db.ExecContext(ctx, updateFitNotes, arg.Notes, arg.ID)
+	return err
 }
 
 const updateRunNotes = `-- name: UpdateRunNotes :exec

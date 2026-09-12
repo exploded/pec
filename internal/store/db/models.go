@@ -8,12 +8,48 @@ import (
 	"database/sql"
 )
 
+type Anchor struct {
+	ID           int64   `json:"id"`
+	CreatedAt    string  `json:"created_at"`
+	PecIndex     int64   `json:"pec_index"`
+	At           string  `json:"at"`
+	SigmaS       float64 `json:"sigma_s"`
+	Source       string  `json:"source"`
+	PeriodS      float64 `json:"period_s"`
+	PeriodSigmaS float64 `json:"period_sigma_s"`
+	Readings     int64   `json:"readings"`
+	Note         string  `json:"note"`
+}
+
 type File struct {
 	Sha256     string `json:"sha256"`
 	Kind       string `json:"kind"`
 	Name       string `json:"name"`
 	Size       int64  `json:"size"`
 	UploadedAt string `json:"uploaded_at"`
+}
+
+type Fit struct {
+	ID           int64         `json:"id"`
+	CreatedAt    string        `json:"created_at"`
+	Mode         string        `json:"mode"`
+	RunID        sql.NullInt64 `json:"run_id"`
+	AnchorID     sql.NullInt64 `json:"anchor_id"`
+	FileSha256   string        `json:"file_sha256"`
+	SourceName   string        `json:"source_name"`
+	PhaseRef     string        `json:"phase_ref"`
+	PeriodS      float64       `json:"period_s"`
+	Harmonics    int64         `json:"harmonics"`
+	Inverted     int64         `json:"inverted"`
+	Amp1Arcsec   float64       `json:"amp1_arcsec"`
+	P2pTicks     int64         `json:"p2p_ticks"`
+	QuantRms     float64       `json:"quant_rms"`
+	PhaseErrDeg  float64       `json:"phase_err_deg"`
+	TableText    string        `json:"table_text"`
+	MetaJson     string        `json:"meta_json"`
+	WarningsJson string        `json:"warnings_json"`
+	ToolVersion  string        `json:"tool_version"`
+	Notes        string        `json:"notes"`
 }
 
 type Run struct {

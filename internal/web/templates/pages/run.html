@@ -4,6 +4,7 @@
 <div class="row between">
   <h1>{{$.Title}}</h1>
   <div class="row">
+    {{if .IsTable}}<a class="btn" href="/fit?table={{.Run.ID}}">Fit a table from this</a>{{else}}<a class="btn" href="/fit?run={{.Run.ID}}">Fit a table from this</a>{{end}}
     <a class="btn" href="/runs/{{.Run.ID}}/report.html">Download report</a>
     <form method="post" action="/runs/{{.Run.ID}}/delete" hx-post="/runs/{{.Run.ID}}/delete" hx-confirm="Delete run {{.Run.ID}}? The uploaded file is kept.">
       <button type="submit" class="danger" hx-disable="this">Delete</button>

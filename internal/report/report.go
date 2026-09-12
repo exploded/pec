@@ -38,6 +38,7 @@ const (
 	KindAnalyse Kind = "analyse"
 	KindTable   Kind = "table"
 	KindVerify  Kind = "verify"
+	KindFit     Kind = "fit"
 )
 
 // Stat is a headline tile or a key/value row.
@@ -69,9 +70,9 @@ type Chart struct {
 
 // HarmonicRow is one line of the harmonic table, pre-formatted.
 type HarmonicRow struct {
-	K                                     int
-	Period, Amp, Ticks, Phase, Sigma      string
-	Before, After, Ratio                  string
+	K                                int
+	Period, Amp, Ticks, Phase, Sigma string
+	Before, After, Ratio             string
 }
 
 // Verdict is the plain-language band at the top of a report.
@@ -85,18 +86,18 @@ type ReportData struct {
 	Generated time.Time
 	Version   string
 
-	Verdict   Verdict
-	Warnings  []string
-	Stats     []Stat
-	Charts    []Chart
-	Harmonics []HarmonicRow
+	Verdict       Verdict
+	Warnings      []string
+	Stats         []Stat
+	Charts        []Chart
+	Harmonics     []HarmonicRow
 	HarmonicsNote string
-	Compare   bool // harmonic table shows before/after/ratio columns
-	RowsTitle string
-	RowsHead  []string
-	Rows      [][]string
-	Source    []Stat
-	Notes     []string
+	Compare       bool // harmonic table shows before/after/ratio columns
+	RowsTitle     string
+	RowsHead      []string
+	Rows          [][]string
+	Source        []Stat
+	Notes         []string
 
 	CSS template.CSS
 }
@@ -302,8 +303,8 @@ func foldChart(f *pe.Result, title, colPts, colCurve string) Chart {
 		YFmt: func(v float64) string { return fmt.Sprintf("%.1f", v) },
 	})
 	return Chart{
-		Title: title,
-		Note:  fmt.Sprintf("Bin means of the detrended samples (%d bins, whiskers ±1 SD) with the %d-harmonic fit. Phase 0 is the session start.", bins, len(f.Curve.Harmonics)),
+		Title:  title,
+		Note:   fmt.Sprintf("Bin means of the detrended samples (%d bins, whiskers ±1 SD) with the %d-harmonic fit. Phase 0 is the session start.", bins, len(f.Curve.Harmonics)),
 		Legend: []LegendItem{{"measured (bin mean ± SD)", colPts}, {"fitted curve", colCurve}},
 		SVG:    template.HTML(svg),
 	}
@@ -524,4 +525,246 @@ func periodAfterNote(v pe.VerifyResult) string {
 		return fmt.Sprintf("after on its own scan: %.1f s", v.PeriodAfterFree)
 	}
 	return "after fitted at before's period"
+}
+
+// BuildFit describes a generated table: what was written, where its phase
+// came from, and how far it may be out.
+func BuildFit(r *analysis.FitResult, sourceName string, loc *time.Location) ReportData {
+	cfg := r.Params.Config
+	st := r.Stats
+	h1 := r.Correction.Fundamental()
+	period := r.Period
+	if period <= 0 {
+		period = 150
+	}
+	d := ReportData{Kind: KindFit, Subtitle: sourceName, Warnings: r.Warnings}
+	p2pArc := float64(st.P2P) * cfg.ArcsecPerTick
+
+	var detail string
+	switch r.Mode {
+	case analysis.ModeTCS:
+		d.Title = "PEC table from the TCS recording"
+		detail = fmt.Sprintf("The recording was smoothed to its first %d harmonics, removing %.3f″ RMS of noise; rounding to whole ticks adds %.3f″ RMS. The phase is the mount's own, so no anchor was needed.",
+			r.Params.Harmonics, r.NoiseRemoved, r.QuantRMS)
+	default:
+		d.Title = "PEC table from a guide-log run"
+		b := r.PhaseErr
+		detail = fmt.Sprintf("Fitted with the period pinned at %.2f s and the phase set by anchor index %d. The phase-error budget is ±%.1f° (anchor ±%.1f°, period ±%.1f°), which would leave %.0f%% of the fundamental behind. Rounding to whole ticks adds %.3f″ RMS.",
+			r.Period, r.Anchor.Index, b.TotalDeg, b.AnchorDeg, b.PeriodDeg, 100*b.ResidualFraction, r.QuantRMS)
+	}
+	if r.Params.Invert {
+		detail += " The table is inverted (negated) as requested."
+	}
+	head := fmt.Sprintf("Table ready: %d ticks peak-to-peak (%.2f″), fundamental %.2f″", st.P2P, p2pArc, h1.Amp)
+	if r.Level == "bad" {
+		head = "Do not paste this table"
+		detail = "See the warnings. The numbers are shown so they can be checked, but this table should not go into the mount. " + detail
+	}
+	d.Verdict = Verdict{Level: r.Level, Headline: head, Detail: detail}
+
+	d.Stats = []Stat{
+		{"Peak-to-peak", fmt.Sprintf("%d ticks", st.P2P), fmt.Sprintf("%.2f″ · min %d / max %d", p2pArc, st.Min, st.Max)},
+		{"Fundamental", arc(h1.Amp), fmt.Sprintf("%.2f ticks · phase %.1f° from index 0", h1.Amp/cfg.ArcsecPerTick, h1.PhaseDeg)},
+		{"Quantisation", arc3(r.QuantRMS), "RMS from rounding to whole ticks"},
+	}
+	if r.Mode == analysis.ModeTCS {
+		d.Stats = append(d.Stats, Stat{"Noise removed", arc3(r.NoiseRemoved), fmt.Sprintf("recording minus its %d harmonics", r.Params.Harmonics)})
+	} else {
+		b := r.PhaseErr
+		d.Stats = append(d.Stats,
+			Stat{"Phase-error budget", fmt.Sprintf("±%.1f°", b.TotalDeg), fmt.Sprintf("anchor ±%.1f° · period ±%.1f° · leaves %.0f%% of the fundamental", b.AnchorDeg, b.PeriodDeg, 100*b.ResidualFraction)},
+			Stat{"Period", fitPeriodText(r), "source: " + r.PeriodSource},
+			Stat{"Anchor", fmt.Sprintf("index %d", r.Anchor.Index), anchorText(r, loc)},
+		)
+	}
+	d.Stats = append(d.Stats, Stat{"Entries", fmt.Sprintf("%d", cfg.Entries), fmt.Sprintf("%.4f″ per tick", cfg.ArcsecPerTick)})
+
+	if r.Mode == analysis.ModeIndex {
+		d.Charts = append(d.Charts, indexFoldChart(r))
+	} else {
+		d.Charts = append(d.Charts, recordingChart(r))
+	}
+	d.Charts = append(d.Charts, tableChart(r),
+		harmonicBars([]pe.Curve{r.Correction}, []string{colFitted}, nil, "Harmonic amplitudes of the correction"))
+	d.Harmonics = harmonicRows(r.Correction, period, cfg)
+	d.HarmonicsNote = "correction curve; phase relative to index 0"
+	if r.Period <= 0 {
+		d.HarmonicsNote += fmt.Sprintf("; periods assume a %.0f s worm", period)
+	}
+	d.Source = fitSource(r, sourceName, loc)
+	d.Notes = fitNotes(r)
+	return d
+}
+
+func fitPeriodText(r *analysis.FitResult) string {
+	if r.PeriodSigma > 0 {
+		return fmt.Sprintf("%.2f ± %.2f s", r.Period, r.PeriodSigma)
+	}
+	return fmt.Sprintf("%.2f s", r.Period)
+}
+
+func anchorText(r *analysis.FitResult, loc *time.Location) string {
+	a := r.Anchor
+	sigma := a.SigmaS
+	if sigma <= 0 {
+		sigma = analysis.DefaultAnchorSigma
+	}
+	if a.At.IsZero() {
+		return fmt.Sprintf("±%.0f s · %.0f s into the run", sigma, r.AnchorOffset)
+	}
+	return fmt.Sprintf("%s ±%.0f s · %.0f s into the run", a.At.In(loc).Format("2006-01-02 15:04:05"), sigma, r.AnchorOffset)
+}
+
+// indexFoldChart places the detrended samples at the table index the mount
+// was showing, with the fitted error curve.
+func indexFoldChart(r *analysis.FitResult) Chart {
+	f := r.Fit
+	n := float64(r.Params.Config.Entries)
+	bins := min(50, max(12, len(f.Detrended)/4))
+	fold := pe.Fold(f.Detrended, r.Period, r.PhaseOrigin, bins)
+	var pnts []XY
+	var errs []float64
+	for _, b := range fold {
+		if b.N == 0 {
+			continue
+		}
+		pnts = append(pnts, XY{b.Phase * n, b.Mean})
+		errs = append(errs, b.SD)
+	}
+	curve := make([]XY, 0, 201)
+	for i := 0; i <= 200; i++ {
+		phi := float64(i) / 200
+		curve = append(curve, XY{phi * n, r.Error.At(phi)})
+	}
+	svg := RenderXY([]Series{
+		{Label: "", Color: colMeasured, Pts: pnts, ErrY: errs, NoLine: true},
+		{Label: "fit", Color: colFitted, Pts: curve},
+	}, Axes{
+		H: 300, XMin: 0, XMax: n, XTicks: 5, YTicks: 4, ZeroLine: true,
+		YLabel: "RA error, arcsec (drift removed)", XLabel: "table index",
+		XFmt: func(v float64) string { return fmt.Sprintf("%.0f", v) },
+		YFmt: func(v float64) string { return fmt.Sprintf("%.1f", v) },
+	})
+	return Chart{
+		Title:  "Measured error in table phase",
+		Note:   fmt.Sprintf("Bin means of the detrended samples (%d bins, whiskers ±1 SD) placed at the PEC index the mount was showing, from the anchor and the pinned period, with the fitted error curve. The written correction is the negative of this curve.", bins),
+		Legend: []LegendItem{{"measured (bin mean ± SD)", colMeasured}, {"fitted error", colFitted}},
+		SVG:    template.HTML(svg),
+	}
+}
+
+// recordingChart shows the TCS recording against its smoothed curve.
+func recordingChart(r *analysis.FitResult) Chart {
+	n := len(r.Raw)
+	raw := make([]XY, n)
+	model := r.Error.Sample(n)
+	sm := make([]XY, n)
+	for i := range raw {
+		raw[i] = XY{float64(i), r.Raw[i]}
+		sm[i] = XY{float64(i), model[i]}
+	}
+	svg := RenderXY([]Series{
+		{Label: "recording", Color: colMeasured, Pts: raw, Thin: true},
+		{Label: "smoothed", Color: colFitted, Pts: sm},
+	}, Axes{
+		H: 300, XMin: 0, XMax: float64(n), XTicks: 5, YTicks: 4, ZeroLine: true, NoDirectLabs: true,
+		YLabel: "correction, arcsec", XLabel: "table index",
+		XFmt: func(v float64) string { return fmt.Sprintf("%.0f", v) },
+		YFmt: func(v float64) string { return fmt.Sprintf("%.1f", v) },
+	})
+	note := fmt.Sprintf("The TCS recording in arcsec with its %d-harmonic smoothing; %.3f″ RMS of noise is removed.", r.Params.Harmonics, r.NoiseRemoved)
+	if r.Params.Invert {
+		note += " The written table is the smoothed curve negated."
+	}
+	return Chart{
+		Title:  "Recorded table and its smoothed curve",
+		Note:   note,
+		Legend: []LegendItem{{"TCS recording", colMeasured}, {"smoothed curve", colFitted}},
+		SVG:    template.HTML(svg),
+	}
+}
+
+// tableChart shows the written table over the unrounded curve.
+func tableChart(r *analysis.FitResult) Chart {
+	cfg := r.Params.Config
+	n := len(r.Table.Values)
+	smooth := make([]XY, n)
+	ticks := make([]XY, n)
+	for i := range smooth {
+		smooth[i] = XY{float64(i), r.Values[i]}
+		ticks[i] = XY{float64(i), float64(r.Table.Values[i]) * cfg.ArcsecPerTick}
+	}
+	svg := RenderXY([]Series{
+		{Label: "curve", Color: colMeasured, Pts: smooth, Thin: true},
+		{Label: "table", Color: colFitted, Pts: ticks},
+	}, Axes{
+		H: 260, XMin: 0, XMax: float64(n), XTicks: 5, YTicks: 4, ZeroLine: true, NoDirectLabs: true,
+		YLabel: "correction, arcsec", XLabel: "table index",
+		XFmt: func(v float64) string { return fmt.Sprintf("%.0f", v) },
+		YFmt: func(v float64) string { return fmt.Sprintf("%.1f", v) },
+	})
+	return Chart{
+		Title:  "Correction written to the table",
+		Note:   fmt.Sprintf("The table as written, in whole ticks of %.4f″, over the unrounded curve. The difference is the %.3f″ RMS quantisation.", cfg.ArcsecPerTick, r.QuantRMS),
+		Legend: []LegendItem{{"curve before rounding", colMeasured}, {"written table", colFitted}},
+		SVG:    template.HTML(svg),
+	}
+}
+
+func fitSource(r *analysis.FitResult, name string, loc *time.Location) []Stat {
+	out := []Stat{{K: "File", V: name}}
+	inv := "not inverted"
+	if r.Params.Invert {
+		inv = "inverted"
+	}
+	switch r.Mode {
+	case analysis.ModeTCS:
+		out = append(out,
+			Stat{K: "Mode", V: "TCS recording: the table is the recording smoothed; phase and units are the mount's own"},
+			Stat{K: "Options", V: fmt.Sprintf("%d harmonics · %s · %.4f″ per tick", r.Params.Harmonics, inv, r.Params.Config.ArcsecPerTick)},
+			Stat{K: "Sign", V: "assumes the TCS records a correction with the same sign as the table it plays back"},
+		)
+	default:
+		out = append(out, Stat{K: "Mode", V: "guide-log run with an anchor: sample times mapped onto the PEC index from the anchor and the pinned period"})
+		if r.Session != nil {
+			s := r.Session.Session
+			out = append(out, Stat{K: "Run", V: fmt.Sprintf("session %d, begins %s · exposure %d ms · %s", s.Index, s.Begins.In(loc).Format("2006-01-02 15:04:05 MST"), s.ExposureMS, guidingWord(r.Session))})
+		}
+		out = append(out,
+			Stat{K: "Anchor", V: fmt.Sprintf("index %d · %s", r.Anchor.Index, anchorText(r, loc))},
+			Stat{K: "Period", V: fmt.Sprintf("%s · %s", fitPeriodText(r), r.PeriodSource)},
+			Stat{K: "Options", V: fmt.Sprintf("%d harmonics · %s · exposure-midpoint shift %s · %.4f″ per tick", r.Params.Harmonics, inv, onOff(r.Params.ExposureShift), r.Params.Config.ArcsecPerTick)},
+		)
+		raSign := 1.0
+		if r.Session != nil {
+			raSign = r.Session.Params.RASign
+		}
+		out = append(out, Stat{K: "Sign", V: fmt.Sprintf("table = −(measured error); error = %+.0f × PHD2 RARawDistance × pixel scale", raSign)})
+	}
+	return out
+}
+
+func guidingWord(res *analysis.SessionResult) string {
+	switch {
+	case res.Guiding.IsGA:
+		return "Guiding Assistant run"
+	case res.Guiding.Corrections > 0:
+		return fmt.Sprintf("guided (%d RA pulses)", res.Guiding.Corrections)
+	}
+	return "no corrections sent"
+}
+
+func onOff(b bool) string {
+	if b {
+		return "on"
+	}
+	return "off"
+}
+
+func fitNotes(r *analysis.FitResult) []string {
+	switch r.Mode {
+	case analysis.ModeTCS:
+		return []string{"Assumes the TCS records a correction with the same sign as the table it plays back. Verify with a PEC-on Guiding Assistant run: if the error doubles, re-fit with invert."}
+	}
+	return []string{"Assumes tracking ran uninterrupted between the anchor and the run, and that the RA sign is right. Verify with a PEC-on Guiding Assistant run before trusting it: if the error doubles, re-fit with invert; if it is unchanged, the phase is wrong."}
 }

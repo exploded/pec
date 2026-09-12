@@ -1,0 +1,96 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>Fit a PEC table</h1>
+<p class="lede">Write a paste-ready table. A phase reference is required: a table the TCS recorded itself
+(already in the mount's phase) or a guide-log run plus an anchor that ties the PEC index to the clock.
+Preview first; nothing is saved until you press Save. Nothing is ever sent to the mount.</p>
+
+{{with .Data}}
+<form id="fit-form" class="card" hx-post="/fit/preview" hx-target="#fit-preview" hx-swap="innerHTML show:#fit-preview:top"
+      hx-status:422="target:#fit-error swap:innerHTML">
+  <fieldset class="mode">
+    <legend>Phase reference</legend>
+
+    <label class="radio"><input type="radio" name="mode" value="tcs" {{if eq .Mode "tcs"}}checked{{end}}>
+      A table the TCS recorded itself (preferred)</label>
+    <div class="indent">
+      {{if .Tables}}
+      <label>Recorded table
+        <select name="table">
+          {{range .Tables}}<option value="{{.ID}}" {{if eq $.Data.TableID .ID}}selected{{end}}>run {{.ID}} · {{.SourceName}} · analysed {{.When}}{{if .Notes}} · {{.Notes}}{{end}}</option>{{end}}
+        </select>
+      </label>
+      {{else}}
+      <p class="small">No TCS tables analysed yet. <a href="/table">Upload the recording</a> on the TCS table page first.</p>
+      {{end}}
+    </div>
+
+    <label class="radio"><input type="radio" name="mode" value="index" {{if eq .Mode "index"}}checked{{end}}>
+      A guide-log run with an anchor</label>
+    <div class="indent grid">
+      {{if .Runs}}
+      <label>Run
+        <select name="run">
+          {{range .Runs}}<option value="{{.ID}}" {{if eq $.Data.RunID .ID}}selected{{end}}>run {{.ID}} · session {{.SessionIndex}} · {{.Begins}} · {{f2 .Amp1Arcsec}}″ · PEC {{.PecText}}</option>{{end}}
+        </select>
+      </label>
+      {{else}}
+      <p class="small">No guide-log runs yet. <a href="/analyse">Analyse a Guiding Assistant run</a> first.</p>
+      {{end}}
+      {{if .Anchors}}
+      <label>Anchor
+        <select name="anchor">
+          {{range .Anchors}}<option value="{{.ID}}" {{if eq $.Data.AnchorID .ID}}selected{{end}}>#{{.ID}} · index {{.PecIndex}} at {{.AtText}}{{if .Note}} · {{.Note}}{{end}}</option>{{end}}
+        </select>
+      </label>
+      {{else}}
+      <p class="small">No anchors yet. <a href="/anchor">Add one</a> while the TCS window shows the index.</p>
+      {{end}}
+      <label>Period (s; 0 = the run's own fit) <input type="number" name="period" value="0" step="0.01" min="0"></label>
+      <label>Period uncertainty (s) <input type="number" name="period_sigma" value="0" step="0.01" min="0"></label>
+      <label class="check"><input type="checkbox" name="exposure_shift" value="1" {{if .Params.ExposureShift}}checked{{end}}> Shift frame times to the exposure midpoint</label>
+    </div>
+  </fieldset>
+
+  <div class="grid">
+    <label>Harmonics <input type="number" name="harmonics" value="{{.Params.Harmonics}}" min="1" max="12"></label>
+    <label class="check"><input type="checkbox" name="invert" value="1"> Invert (negate the table)</label>
+    <label class="wide">Notes <input type="text" name="notes" placeholder="what this table is for"></label>
+  </div>
+  <div class="row">
+    <button type="submit" hx-disable="this">Preview</button>
+    <div id="fit-error" class="slot inline"></div>
+  </div>
+</form>
+
+<div id="fit-preview" class="slot"></div>
+
+{{if .Fits}}
+<h2>Saved tables</h2>
+<div class="card">
+<div class="scroll">
+<table class="runs">
+  <thead><tr><th>#</th><th>Written</th><th>Mode</th><th>Phase reference</th><th>Period</th><th>Harmonics</th><th>Inverted</th><th>Peak-to-peak</th><th>Fundamental</th><th>Phase ±</th><th>Notes</th></tr></thead>
+  <tbody>
+  {{range .Fits}}
+  <tr>
+    <td><a href="/fits/{{.ID}}">{{.ID}}</a></td>
+    <td class="mono">{{.When}}</td>
+    <td>{{.ModeText}}</td>
+    <td class="trunc" title="{{.PhaseRef}}">{{.PhaseRef}}</td>
+    <td>{{if .PeriodS}}{{f2 .PeriodS}} s{{end}}</td>
+    <td>{{.Harmonics}}</td>
+    <td>{{if .Inverted}}yes{{end}}</td>
+    <td>{{.P2pTicks}} ticks</td>
+    <td>{{f3 .Amp1Arcsec}}″</td>
+    <td>{{if .PhaseErrDeg}}{{f1 .PhaseErrDeg}}°{{end}}</td>
+    <td class="trunc" title="{{.Notes}}">{{.Notes}}</td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+</div>
+{{end}}
+{{end}}
+{{end}}

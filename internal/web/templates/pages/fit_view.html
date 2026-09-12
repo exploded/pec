@@ -1,0 +1,33 @@
+{{template "base" .}}
+{{define "content"}}
+{{with .Data}}
+<div class="row between">
+  <h1>{{$.Title}}</h1>
+  <div class="row">
+    <a class="btn" href="/fits/{{.Fit.ID}}/pec_table.txt">Download table</a>
+    <a class="btn" href="/fits/{{.Fit.ID}}/pec_table.meta.json">Download meta</a>
+    <form method="post" action="/fits/{{.Fit.ID}}/delete" hx-post="/fits/{{.Fit.ID}}/delete" hx-confirm="Delete fit {{.Fit.ID}}? The source file and run are kept.">
+      <button type="submit" class="danger" hx-disable="this">Delete</button>
+    </form>
+  </div>
+</div>
+<p class="lede">Fit {{.Fit.ID}} · written {{.Fit.When}} · {{.Fit.ModeText}} · {{.Fit.PhaseRef}} · {{.Fit.SourceName}}</p>
+
+{{.Body}}
+
+<details class="card" open>
+  <summary>Table text · {{.Fit.Harmonics}} harmonics{{if .Fit.Inverted}} · inverted{{end}} · copy, then Paste in the TCS window</summary>
+  <div class="row" style="margin:0.5rem 0">
+    <button type="button" class="small-btn" onclick="navigator.clipboard.writeText(document.getElementById('table-text').textContent).then(()=>document.body.dispatchEvent(new CustomEvent('showToast',{detail:{msg:'Table copied'}})))">Copy to clipboard</button>
+  </div>
+  <pre id="table-text" class="table-text">{{.Fit.TableText}}</pre>
+</details>
+
+<form class="card notes" hx-post="/fits/{{.Fit.ID}}/notes" hx-swap="none">
+  <div class="grid">
+    <label class="wide">Notes <input type="text" name="notes" value="{{.Fit.Notes}}" placeholder="pasted into the mount on…"></label>
+  </div>
+  <div class="row"><button type="submit" hx-disable="this">Save notes</button></div>
+</form>
+{{end}}
+{{end}}

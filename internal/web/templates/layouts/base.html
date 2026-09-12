@@ -4,10 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{if .Title}}{{.Title}} · pec{{else}}pec{{end}}</title>
-  <link rel="stylesheet" href="/report.css">
-  <link rel="stylesheet" href="/static/css/app.css">
+  <link rel="stylesheet" href="/report.css?v={{.Assets}}">
+  <link rel="stylesheet" href="/static/css/app.css?v={{.Assets}}">
   <meta name="htmx-config" content='{"noSwap": [204, 304, "5xx"]}'>
-  <script src="/static/js/htmx.min.js" defer></script>
+  <script src="/static/js/htmx.min.js?v={{.Assets}}" defer></script>
 </head>
 <body>
   {{template "nav" .}}

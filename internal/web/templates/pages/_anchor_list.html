@@ -1,0 +1,32 @@
+{{define "anchor/_list"}}{{with .Data}}
+{{if .Anchors}}
+<div class="card">
+<div class="scroll">
+<table class="runs">
+  <thead><tr><th>#</th><th>Index</th><th>Seen at</th><th></th><th>±</th><th>Source</th><th>Period</th><th>Note</th><th></th></tr></thead>
+  <tbody>
+  {{range .Anchors}}
+  <tr>
+    <td>{{.ID}}</td>
+    <td class="mono">{{.PecIndex}}</td>
+    <td class="mono">{{.AtText}}</td>
+    <td class="small">{{.Ago}}</td>
+    <td>{{f1 .SigmaS}} s</td>
+    <td>{{.Source}}</td>
+    <td>{{if .PeriodS}}{{f2 .PeriodS}} s{{end}}</td>
+    <td class="trunc" title="{{.Note}}">{{.Note}}</td>
+    <td><div class="row">
+      <a class="btn small-btn" href="/fit?anchor={{.ID}}">Use in Fit</a>
+      <button type="button" class="danger small-btn" hx-post="/anchors/{{.ID}}/delete" hx-target="#anchors" hx-swap="innerHTML"
+              hx-confirm="Delete anchor {{.ID}} (index {{.PecIndex}})?" hx-disable="this">Delete</button>
+    </div></td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+</div>
+{{else}}
+<div class="card muted"><p>No anchors yet.</p></div>
+{{end}}
+{{end}}{{end}}

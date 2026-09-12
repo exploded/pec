@@ -82,3 +82,16 @@ form.notes { margin-top: 1rem; }
   background: var(--good-bg); color: var(--good-text); border: 1px solid var(--good-line);
   border-radius: 8px; padding: 0.5rem 0.9rem; box-shadow: 0 4px 14px rgba(0,0,0,.14);
 }
+
+/* Fit and anchor pages */
+fieldset.mode { border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem 0.25rem; margin: 0 0 1rem; }
+fieldset.mode legend { color: var(--text-secondary); font-size: 0.85rem; padding: 0 0.4rem; }
+label.radio, label.check { flex-direction: row; align-items: center; gap: 0.5rem; color: var(--text-primary); font-size: 0.95rem; }
+label.check { align-self: end; padding-bottom: 0.4rem; }
+.indent { margin: 0.4rem 0 0.9rem 1.6rem; }
+.btn.small-btn, button.small-btn { min-width: 0; padding: 0.25rem 0.6rem; font-size: 0.85rem; }
+pre.table-text {
+  max-height: 22rem; overflow: auto; font-size: 0.85rem; margin: 0;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem;
+}
+details.card > summary { color: var(--text-primary); }

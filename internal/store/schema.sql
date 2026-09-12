@@ -50,3 +50,45 @@ CREATE TABLE IF NOT EXISTS runs (
     notes            TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS runs_created ON runs(created_at DESC);
+
+-- A PEC index reading with the wall-clock instant it was seen. Typed anchors
+-- (milestone 3) have one reading and a timing sigma of about a reaction
+-- time; watch anchors (milestone 4) carry the index-rate fit as well.
+CREATE TABLE IF NOT EXISTS anchors (
+    id             INTEGER PRIMARY KEY,
+    created_at     TEXT NOT NULL,             -- RFC3339
+    pec_index      INTEGER NOT NULL,          -- 0..entries-1
+    at             TEXT NOT NULL,             -- RFC3339 with offset, server clock
+    sigma_s        REAL NOT NULL DEFAULT 2,   -- timing uncertainty, seconds
+    source         TEXT NOT NULL DEFAULT 'typed',  -- 'typed' | 'uia' | 'pixels'
+    period_s       REAL NOT NULL DEFAULT 0,   -- from an index-rate fit; 0 = none
+    period_sigma_s REAL NOT NULL DEFAULT 0,
+    readings       INTEGER NOT NULL DEFAULT 1,
+    note           TEXT NOT NULL DEFAULT ''
+);
+
+-- A generated table. The table text and provenance are stored in full so
+-- a fit outlives the run or anchor it came from.
+CREATE TABLE IF NOT EXISTS fits (
+    id            INTEGER PRIMARY KEY,
+    created_at    TEXT NOT NULL,              -- RFC3339
+    mode          TEXT NOT NULL,              -- 'tcs' | 'index'
+    run_id        INTEGER REFERENCES runs(id) ON DELETE SET NULL,
+    anchor_id     INTEGER REFERENCES anchors(id) ON DELETE SET NULL,
+    file_sha256   TEXT NOT NULL REFERENCES files(sha256),
+    source_name   TEXT NOT NULL,
+    phase_ref     TEXT NOT NULL,              -- human-readable
+    period_s      REAL NOT NULL,
+    harmonics     INTEGER NOT NULL,
+    inverted      INTEGER NOT NULL,
+    amp1_arcsec   REAL NOT NULL,
+    p2p_ticks     INTEGER NOT NULL,
+    quant_rms     REAL NOT NULL,
+    phase_err_deg REAL NOT NULL DEFAULT 0,
+    table_text    TEXT NOT NULL,
+    meta_json     TEXT NOT NULL,
+    warnings_json TEXT NOT NULL DEFAULT '[]',
+    tool_version  TEXT NOT NULL DEFAULT '',
+    notes         TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS fits_created ON fits(created_at DESC);

@@ -46,7 +46,7 @@ func (s *Store) SaveSession(ctx context.Context, res *analysis.SessionResult, m 
 		FileSha256: m.FileSHA, SourceName: m.SourceName,
 		SessionIndex: int64(sess.Index), SessionBegins: sess.Begins.Format(time.RFC3339),
 		Equipment: sess.Profile,
-		RaHours: sess.RAHours, DecDeg: sess.DecDeg, HourAngle: sess.HourAngle, AltDeg: sess.AltDeg, PierSide: sess.PierSide,
+		RaHours:   sess.RAHours, DecDeg: sess.DecDeg, HourAngle: sess.HourAngle, AltDeg: sess.AltDeg, PierSide: sess.PierSide,
 		PixelScale: sess.PixelScale, ExposureMs: int64(sess.ExposureMS),
 		SampleCount: int64(f.N), CadenceS: f.Cadence.Median, SpanS: f.Span, Cycles: f.Cycles, DriftArcsecMin: f.Drift,
 		PeriodS: f.Period, PeriodSigmaS: sigma, PeriodFixed: b2i(f.PeriodFixed),
@@ -74,7 +74,7 @@ func (s *Store) SaveTable(ctx context.Context, res *analysis.TableResult, m Save
 		HarmonicsJson: HarmonicsJSON(res.Curve), Amp1Arcsec: h1.Amp, Phase1Deg: h1.PhaseDeg,
 		PeriodicRms: res.Curve.RMS(), ResidualRms: res.ResidRMS, PeakToPeak: float64(res.Stats.P2P) * cfg.ArcsecPerTick,
 		PecOn: nullBool(m.PecOn), RaSign: 1,
-		OptionsJson: mustJSON(map[string]any{"harmonics": res.Harmonics, "arcsec_per_tick": cfg.ArcsecPerTick}),
+		OptionsJson:  mustJSON(map[string]any{"harmonics": res.Harmonics, "arcsec_per_tick": cfg.ArcsecPerTick}),
 		WarningsJson: "[]", ToolVersion: m.Version, Notes: m.Notes,
 	}
 	r, err := s.Q.InsertRun(ctx, p)
@@ -82,6 +82,74 @@ func (s *Store) SaveTable(ctx context.Context, res *analysis.TableResult, m Save
 		return 0, fmt.Errorf("saving table run: %w", err)
 	}
 	return r.LastInsertId()
+}
+
+// SaveAnchor stores a PEC index reading and returns its id.
+func (s *Store) SaveAnchor(ctx context.Context, a analysis.Anchor, source, note string) (int64, error) {
+	if source == "" {
+		source = "typed"
+	}
+	sigma := a.SigmaS
+	if sigma <= 0 {
+		sigma = analysis.DefaultAnchorSigma
+	}
+	r, err := s.Q.InsertAnchor(ctx, db.InsertAnchorParams{
+		CreatedAt: time.Now().UTC().Format(time.RFC3339), PecIndex: int64(a.Index),
+		At: a.At.Format(time.RFC3339Nano), SigmaS: sigma, Source: source,
+		PeriodS: a.Period, PeriodSigmaS: a.PeriodSigma, Readings: 1, Note: note,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("saving anchor: %w", err)
+	}
+	return r.LastInsertId()
+}
+
+// AnchorFromRow converts a stored anchor back to the analysis type.
+func AnchorFromRow(r db.Anchor) (analysis.Anchor, error) {
+	at, err := time.Parse(time.RFC3339Nano, r.At)
+	if err != nil {
+		return analysis.Anchor{}, fmt.Errorf("anchor %d: bad time %q", r.ID, r.At)
+	}
+	return analysis.Anchor{
+		ID: r.ID, Index: int(r.PecIndex), At: at, SigmaS: r.SigmaS,
+		Period: r.PeriodS, PeriodSigma: r.PeriodSigmaS,
+	}, nil
+}
+
+// FitSaveMeta is what the caller knows about a fit that the fit does not.
+type FitSaveMeta struct {
+	FileSHA    string
+	SourceName string
+	PhaseRef   string // human-readable
+	Version    string
+	Notes      string
+	RunID      int64 // 0 = none
+	AnchorID   int64 // 0 = none
+}
+
+// SaveFit stores a generated table with its provenance and returns its id.
+func (s *Store) SaveFit(ctx context.Context, r *analysis.FitResult, meta analysis.Meta, m FitSaveMeta) (int64, error) {
+	h1 := r.Correction.Fundamental()
+	res, err := s.Q.InsertFit(ctx, db.InsertFitParams{
+		CreatedAt: time.Now().UTC().Format(time.RFC3339), Mode: r.Mode,
+		RunID: nullID(m.RunID), AnchorID: nullID(m.AnchorID),
+		FileSha256: m.FileSHA, SourceName: m.SourceName, PhaseRef: m.PhaseRef,
+		PeriodS: r.Period, Harmonics: int64(r.Params.Harmonics), Inverted: b2i(r.Params.Invert),
+		Amp1Arcsec: h1.Amp, P2pTicks: int64(r.Stats.P2P), QuantRms: r.QuantRMS, PhaseErrDeg: r.PhaseErr.TotalDeg,
+		TableText: r.Table.String(), MetaJson: mustJSON(meta), WarningsJson: mustJSON(r.Warnings),
+		ToolVersion: m.Version, Notes: m.Notes,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("saving fit: %w", err)
+	}
+	return res.LastInsertId()
+}
+
+func nullID(id int64) sql.NullInt64 {
+	if id == 0 {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: id, Valid: true}
 }
 
 // HarmonicsJSON encodes a curve for the harmonics_json column.

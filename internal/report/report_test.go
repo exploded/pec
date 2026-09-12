@@ -109,3 +109,44 @@ func TestSVGBasics(t *testing.T) {
 		t.Errorf("niceCeil %v %v %v", niceCeil(0.73), niceCeil(2.1), niceCeil(11))
 	}
 }
+
+func TestFitReports(t *testing.T) {
+	loc, _ := time.LoadLocation("Australia/Melbourne")
+	tbl, err := tcs.ReadFile("../../testdata/PEC_table_TCS_2026-09-12.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fr, err := analysis.FitTable(tbl, analysis.DefaultFitParams())
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := BuildFit(fr, "table.txt", loc)
+	out, err := Render(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Table ready", "verdict good", "Recorded table and its smoothed curve", "Correction written to the table", "Noise removed", "same sign"} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("tcs fit report lacks %q", want)
+		}
+	}
+
+	res := fixtureSession(t, 2)
+	a := analysis.Anchor{Index: 100, At: res.Session.Begins.Add(30 * time.Second)}
+	p := analysis.DefaultFitParams()
+	p.Harmonics = 3
+	ir, err := analysis.FitSession(res, a, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d = BuildFit(ir, "log.txt", loc)
+	out, err = Render(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Phase-error budget", "Measured error in table phase", "index 100", "anchor", "source: run"} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("index fit report lacks %q", want)
+		}
+	}
+}

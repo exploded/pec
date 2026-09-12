@@ -45,10 +45,28 @@ type Options struct {
 
 // Server holds parsed templates and the request handlers.
 type Server struct {
-	opt   Options
-	pages map[string]*template.Template
-	log   *slog.Logger
-	st    *store.Store
+	opt    Options
+	pages  map[string]*template.Template
+	log    *slog.Logger
+	st     *store.Store
+	assets string // hash of the embedded static files, appended to asset URLs
+}
+
+// assetTag hashes every embedded static file and the report stylesheet so
+// asset URLs change with each rebuild and the browser never shows stale CSS.
+func assetTag() string {
+	h := sha256.New()
+	_ = fs.WalkDir(staticFS, "static", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, _ := staticFS.ReadFile(path)
+		h.Write([]byte(path))
+		h.Write(b)
+		return nil
+	})
+	h.Write([]byte(report.CSS()))
+	return hex.EncodeToString(h.Sum(nil))[:12]
 }
 
 // New loads the templates and prepares the data directory.
@@ -69,7 +87,7 @@ func New(opt Options, logger *slog.Logger) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Server{opt: opt, pages: pages, log: logger, st: opt.Store}, nil
+	return &Server{opt: opt, pages: pages, log: logger, st: opt.Store, assets: assetTag()}, nil
 }
 
 // Handler builds the router.
@@ -94,6 +112,17 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /runs/{id}/notes", s.runNotes)
 	mux.HandleFunc("GET /verify", s.verifyPage)
 	mux.HandleFunc("POST /verify", s.verifyRun)
+	mux.HandleFunc("GET /anchor", s.anchorPage)
+	mux.HandleFunc("POST /anchor", s.anchorCreate)
+	mux.HandleFunc("POST /anchors/{id}/delete", s.anchorDelete)
+	mux.HandleFunc("GET /fit", s.fitPage)
+	mux.HandleFunc("POST /fit/preview", s.fitPreview)
+	mux.HandleFunc("POST /fit", s.fitSave)
+	mux.HandleFunc("GET /fits/{id}", s.fitViewPage)
+	mux.HandleFunc("GET /fits/{id}/pec_table.txt", s.fitTableDownload)
+	mux.HandleFunc("GET /fits/{id}/pec_table.meta.json", s.fitMetaDownload)
+	mux.HandleFunc("POST /fits/{id}/delete", s.fitDelete)
+	mux.HandleFunc("POST /fits/{id}/notes", s.fitNotes)
 
 	cop := http.NewCrossOriginProtection()
 	return cop.Handler(s.logging(mux))
@@ -179,6 +208,7 @@ func loadTemplates() (map[string]*template.Template, error) {
 type pageData struct {
 	Title   string
 	Version string
+	Assets  string // asset URL version tag
 	Nav     string // active nav item
 	Error   string
 	Data    any
@@ -193,6 +223,7 @@ func (s *Server) render(w http.ResponseWriter, status int, page, name string, d 
 		return
 	}
 	d.Version = s.opt.Version
+	d.Assets = s.assets
 	var buf bytes.Buffer
 	if err := tmpl.ExecuteTemplate(&buf, name, d); err != nil {
 		s.fail(w, fmt.Errorf("render %s/%s: %w", page, name, err))

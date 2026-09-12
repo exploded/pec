@@ -1,8 +1,8 @@
 # pec
 
 Periodic-error analysis and PEC curve fitting for a Paramount ME (MKS 4000, Bisque TCS).
-Reads PHD2 guide logs and TCS PEC tables, fits a harmonic curve, and (from milestone 3)
-writes a paste-ready TCS table. **It never talks to the mount.** No TheSkyX scripting to
+Reads PHD2 guide logs and TCS PEC tables, fits a harmonic curve, and writes a paste-ready TCS
+table with its provenance. **It never talks to the mount.** No TheSkyX scripting to
 write, no serial, no network beyond the local UI.
 
 The brief is `.local/PEC_TOOL_PROMPT.md` (gitignored, authoritative on algorithms and formats).
@@ -47,12 +47,13 @@ cmd/pec/            subcommand dispatch (flag.NewFlagSet per command)
 internal/phd2/      PHD2 guide-log parser: sessions, samples, INFO events, DROP rows
 internal/tcs/       TCS PEC table read/write, ticks <-> arcsec, quantisation
 internal/pe/        the numerics: segmentation, Householder QR, joint LS fit, periodogram, DFT
-internal/analysis/  joins parsers to the fitter; the policy layer (which rows count, warnings)
+internal/analysis/  joins parsers to the fitter; the policy layer (which rows count, warnings);
+                    fit.go (table writer, both phase modes, phase-error budget), meta.go (provenance)
 internal/report/    ReportData builders, Go-generated inline SVG (svg.go), report.css tokens,
                     body.tmpl (embedded in pages) and page.tmpl (standalone download)
 internal/store/     schema.sql, queries.sql, open.go, store.go (save helpers), db/ (sqlc)
-internal/web/       http server, handlers (handlers.go analyse/table, handlers_runs.go runs/verify),
-                    embedded templates and static files
+internal/web/       http server, handlers (handlers.go analyse/table, handlers_runs.go runs/verify,
+                    handlers_fit.go anchor/fit/fits), embedded templates and static files
 testdata/           real guide-log excerpt (4 sessions) and the real TCS table
 ```
 
@@ -69,6 +70,19 @@ Verify pins the after run to the before run's period and classifies on the funda
 using the 2nd harmonic to tell "inverted" (everything doubled) from "half a cycle out" (even
 harmonics cancelled). A guided run on either side gets a warning: PHD2 suppresses the signal
 regardless of PEC, so only Guiding Assistant runs prove anything.
+
+## Fit (table writer)
+
+Refuses without a phase reference. `tcs` mode: DFT-smooth the TCS's own recording; phase and
+units are the mount's, no PHD2 sign involved. `index` mode: pin the period and set
+`FitOptions.PhaseOrigin = anchorOffset - index*P/N` so the fitted curve is in table phase by
+construction; correction = -error, invert negates again. The anchor offset includes half the
+exposure (centroid = exposure midpoint). Phase-error budget: anchor `360*sigma_t/P`, period
+`360*farS/P*(sigma_P/P)` at the sample farthest from the anchor, quadrature sum; over 20° is
+"do not paste". Sanitise an infinite period sigma to 0 (unknown) before it reaches JSON.
+`pec_table.meta.json` carries everything needed to rebuild the fit from the source file alone
+(analysis params, anchor, period and source), which is how `/fits/{id}` survives run and anchor
+deletion (`ON DELETE SET NULL`).
 
 ## Numerics (verified in tests)
 
@@ -92,3 +106,6 @@ regardless of PEC, so only Guiding Assistant runs prove anything.
 - PHD2 header keys repeat across lines (`Dec` appears in "Norm rates" before the target line);
   extract fields from the current line's pairs, not the first-wins map.
 - Never commit `.local/`, `data/`, `*.db*`.
+- Asset URLs carry `?v=<hash of embedded static files>` (`assetTag`); without it Chrome kept a
+  stale `app.css` across rebuilds despite `Cache-Control: no-cache`.
+- Bash heredocs on this machine fail on non-ASCII (°, ±, ″); write such Go files with the Write tool.

@@ -1,0 +1,13 @@
+{{define "fit/_preview"}}{{with .Data}}
+<section class="card result">
+  <div class="row between">
+    <h2>{{.Title}} · preview</h2>
+    <div class="row">
+      <button type="button" hx-post="/fit" hx-include="#fit-form" hx-swap="none" hx-disable="this"
+              hx-status:422="target:#fit-error swap:innerHTML" {{if eq .Level "bad"}}class="danger"{{end}}>Save table</button>
+      <div id="fit-save-error" class="slot inline"></div>
+    </div>
+  </div>
+  {{.Body}}
+</section>
+{{end}}{{end}}
