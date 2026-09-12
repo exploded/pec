@@ -47,6 +47,8 @@ cmd/pec/            subcommand dispatch (flag.NewFlagSet per command)
 internal/phd2/      PHD2 guide-log parser: sessions, samples, INFO events, DROP rows
 internal/tcs/       TCS PEC table read/write, ticks <-> arcsec, quantisation
 internal/pe/        the numerics: segmentation, Householder QR, joint LS fit, periodogram, DFT
+internal/mks/       MKS 4000 protocol from a USBPcap capture: pcap/pcapng reader, frame splitter,
+                    request/reply pairing, encoder-rate and index analysis (watch.go), Synth for tests
 internal/analysis/  joins parsers to the fitter; the policy layer (which rows count, warnings);
                     fit.go (table writer, both phase modes, phase-error budget), meta.go (provenance)
 internal/report/    ReportData builders, Go-generated inline SVG (svg.go), report.css tokens,
@@ -83,6 +85,18 @@ exposure (centroid = exposure midpoint). Phase-error budget: anchor `360*sigma_t
 `pec_table.meta.json` carries everything needed to rebuild the fit from the source file alone
 (analysis params, anchor, period and source), which is how `/fits/{id}` survives run and anchor
 deletion (`ON DELETE SET NULL`).
+
+## MKS 4000 protocol (inferred from one capture, 2026-09-12)
+
+Frame: `64 00 axis seq len16 word16 data sum16 00 5a`, zeros doubled on the wire, sum16 over the
+decoded bytes before it, len16 = decoded bytes from 64 through the checksum. Requests and replies
+share the seq byte. Commands: 3 status word (0x1200 tracking, 0x0300 slewing, 0x0200 idle), 200
+read u16 register, 210 read i32 register, 211 write i32. Axis 0 registers: 4 "Current Position",
+10 "Current Encoder" (133.5 counts/s tracking = 16 counts per PEC index step, 20,000 per worm
+turn), 16-bit 9 = PEC index (polled only while the TCS PEC tab is showing). The USB adapter
+fragments replies into 1-3 byte packets, so the splitter reassembles. `mks.Synth` builds a
+synthetic capture for tests; the real capture lives in `.local/cpature.pcapng` (gitignored) and
+`TestRealCapture` uses it when present. pec never sends a frame: the encoder exists for tests only.
 
 ## Numerics (verified in tests)
 

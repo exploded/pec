@@ -88,7 +88,7 @@ func get(t *testing.T, ts *httptest.Server, path string) (*http.Response, string
 
 func TestPagesRender(t *testing.T) {
 	ts := newTestServer(t)
-	for _, p := range []string{"/", "/analyse", "/table", "/verify", "/anchor", "/fit", "/report.css", "/static/css/app.css", "/static/js/htmx.min.js"} {
+	for _, p := range []string{"/", "/analyse", "/table", "/verify", "/anchor", "/fit", "/capture", "/report.css", "/static/css/app.css", "/static/js/htmx.min.js"} {
 		resp, _ := get(t, ts, p)
 		if resp.StatusCode != 200 {
 			t.Errorf("%s: status %d", p, resp.StatusCode)

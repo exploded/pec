@@ -1,0 +1,64 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>USB capture</h1>
+<p class="lede">Read the PEC index and the worm period straight from the link between TheSkyX and the
+mount. A passive USBPcap capture (Wireshark) of the mount's USB serial adapter contains TheSkyX's
+own status polling: the HA encoder three times a second, and the PEC index once a second while the
+Bisque TCS window is on its Periodic Error Correction tab. Nothing is sent to the mount.</p>
+
+<details class="card">
+  <summary>How to capture</summary>
+  <ol>
+    <li>Install Wireshark with USBPcap ticked, and reboot once.</li>
+    <li>With TheSkyX connected and the mount <b>tracking</b>, open the Bisque TCS window on the
+      <b>Periodic Error Correction</b> tab and leave it showing.</li>
+    <li>In Wireshark, double-click the <code>USBPcap</code> interface whose tooltip lists the mount's USB serial
+      adapter. Let it run for at least five minutes, ideally through the whole Guiding Assistant run.</li>
+    <li>Stop, save as <code>.pcapng</code> (or capture with USBPcapCMD to <code>.pcap</code>), and upload it here.</li>
+  </ol>
+  <p class="small">Ten minutes is about 50 MB. Uploads up to 1 GB are accepted.</p>
+</details>
+
+{{with .Data}}
+<form class="card" hx-post="/capture" hx-encoding="multipart/form-data"
+      hx-target="#capture-result" hx-swap="innerHTML show:#capture-result:top"
+      hx-status:422="target:#capture-error swap:innerHTML">
+  <div class="row">
+    <label>Capture file <input type="file" name="capture" accept=".pcap,.pcapng" required></label>
+    <button type="submit" hx-disable="this">Decode</button>
+    <div id="capture-error" class="slot inline"></div>
+  </div>
+</form>
+
+<div id="capture-result" class="slot"></div>
+
+{{if .Captures}}
+<h2>Saved captures</h2>
+<div class="card">
+<div class="scroll">
+<table class="runs">
+  <thead><tr><th>#</th><th>Decoded</th><th>Capture start</th><th>File</th><th>Tracking</th><th>Period</th><th>Encoder rate</th><th>Index readings</th><th>Anchor</th><th>Notes</th><th></th></tr></thead>
+  <tbody>
+  {{range .Captures}}
+  <tr>
+    <td>{{.ID}}</td>
+    <td class="mono">{{.When}}</td>
+    <td class="mono">{{.Started}}</td>
+    <td class="trunc" title="{{.SourceName}}">{{.SourceName}}</td>
+    <td>{{if .TrackFrom}}yes{{else}}no{{end}}</td>
+    <td>{{f3 .PeriodS}} ± {{f3 .PeriodSigmaS}} s</td>
+    <td>{{f3 .EncoderRate}} /s</td>
+    <td>{{.IndexReadings}}</td>
+    <td>{{if .AnchorID.Valid}}<a href="/fit?anchor={{.AnchorID.Int64}}">#{{.AnchorID.Int64}}</a>{{else}}none{{end}}</td>
+    <td class="trunc" title="{{.Notes}}">{{.Notes}}</td>
+    <td><button type="button" class="danger small-btn" hx-post="/captures/{{.ID}}/delete" hx-swap="none"
+            hx-confirm="Delete capture {{.ID}}? Its anchor and the file are kept." hx-disable="this">Delete</button></td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+</div>
+{{end}}
+{{end}}
+{{end}}

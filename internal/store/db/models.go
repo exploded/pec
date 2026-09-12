@@ -21,6 +21,31 @@ type Anchor struct {
 	Note         string  `json:"note"`
 }
 
+type Capture struct {
+	ID              int64         `json:"id"`
+	CreatedAt       string        `json:"created_at"`
+	AnchorID        sql.NullInt64 `json:"anchor_id"`
+	FileSha256      string        `json:"file_sha256"`
+	SourceName      string        `json:"source_name"`
+	StartedAt       string        `json:"started_at"`
+	EndedAt         string        `json:"ended_at"`
+	TrackFrom       string        `json:"track_from"`
+	TrackTo         string        `json:"track_to"`
+	Frames          int64         `json:"frames"`
+	EncoderReadings int64         `json:"encoder_readings"`
+	EncoderRate     float64       `json:"encoder_rate"`
+	EncoderRateSig  float64       `json:"encoder_rate_sig"`
+	EncoderRms      float64       `json:"encoder_rms"`
+	CountsPerTurn   float64       `json:"counts_per_turn"`
+	PeriodS         float64       `json:"period_s"`
+	PeriodSigmaS    float64       `json:"period_sigma_s"`
+	IndexReadings   int64         `json:"index_readings"`
+	IndexOffset     float64       `json:"index_offset"`
+	IndexSpread     float64       `json:"index_spread"`
+	WarningsJson    string        `json:"warnings_json"`
+	Notes           string        `json:"notes"`
+}
+
 type File struct {
 	Sha256     string `json:"sha256"`
 	Kind       string `json:"kind"`

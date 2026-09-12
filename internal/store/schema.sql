@@ -92,3 +92,32 @@ CREATE TABLE IF NOT EXISTS fits (
     notes         TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS fits_created ON fits(created_at DESC);
+
+-- A decoded USB capture of the TheSkyX <-> MKS 4000 link: the encoder
+-- rate gives the worm period, the PEC index readings give the anchor. The
+-- anchor itself lives in anchors (source 'capture'); this row keeps the
+-- numbers behind it.
+CREATE TABLE IF NOT EXISTS captures (
+    id               INTEGER PRIMARY KEY,
+    created_at       TEXT NOT NULL,
+    anchor_id        INTEGER REFERENCES anchors(id) ON DELETE SET NULL,
+    file_sha256      TEXT NOT NULL REFERENCES files(sha256),
+    source_name      TEXT NOT NULL,
+    started_at       TEXT NOT NULL,         -- RFC3339, capture clock
+    ended_at         TEXT NOT NULL,
+    track_from       TEXT NOT NULL DEFAULT '',
+    track_to         TEXT NOT NULL DEFAULT '',
+    frames           INTEGER NOT NULL,
+    encoder_readings INTEGER NOT NULL,
+    encoder_rate     REAL NOT NULL,         -- counts/s
+    encoder_rate_sig REAL NOT NULL,
+    encoder_rms      REAL NOT NULL,
+    counts_per_turn  REAL NOT NULL,
+    period_s         REAL NOT NULL,
+    period_sigma_s   REAL NOT NULL,
+    index_readings   INTEGER NOT NULL,
+    index_offset     REAL NOT NULL DEFAULT 0,
+    index_spread     REAL NOT NULL DEFAULT 0,
+    warnings_json    TEXT NOT NULL DEFAULT '[]',
+    notes            TEXT NOT NULL DEFAULT ''
+);

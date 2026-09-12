@@ -222,7 +222,7 @@ func (s *Server) fitPage(w http.ResponseWriter, r *http.Request) {
 	v.TableID, _ = strconv.ParseInt(q.Get("table"), 10, 64)
 	v.AnchorID, _ = strconv.ParseInt(q.Get("anchor"), 10, 64)
 	switch {
-	case v.RunID != 0:
+	case v.RunID != 0 || v.AnchorID != 0:
 		v.Mode = analysis.ModeIndex
 	case v.TableID != 0 || len(v.Tables) > 0:
 		v.Mode = analysis.ModeTCS

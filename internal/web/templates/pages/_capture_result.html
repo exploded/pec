@@ -1,0 +1,15 @@
+{{define "capture/_result"}}{{with .Data}}
+<section class="card result">
+  <form class="row between" hx-post="/capture/save" hx-swap="none" hx-status:422="target:#capture-error swap:innerHTML">
+    <h2>{{.Title}}</h2>
+    <input type="hidden" name="file" value="{{.FileSHA}}">
+    <input type="hidden" name="name" value="{{.FileName}}">
+    <div class="row">
+      <input type="text" name="note" placeholder="note for the anchor">
+      <button type="submit" hx-disable="this" {{if not .HasAnchor}}title="No anchor was found; the period is still saved"{{end}}>
+        {{if .HasAnchor}}Save anchor{{else}}Save period only{{end}}</button>
+    </div>
+  </form>
+  {{.Body}}
+</section>
+{{end}}{{end}}

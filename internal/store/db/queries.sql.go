@@ -19,6 +19,15 @@ func (q *Queries) DeleteAnchor(ctx context.Context, id int64) error {
 	return err
 }
 
+const deleteCapture = `-- name: DeleteCapture :exec
+DELETE FROM captures WHERE id = ?
+`
+
+func (q *Queries) DeleteCapture(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteCapture, id)
+	return err
+}
+
 const deleteFit = `-- name: DeleteFit :exec
 DELETE FROM fits WHERE id = ?
 `
@@ -55,6 +64,40 @@ func (q *Queries) GetAnchor(ctx context.Context, id int64) (Anchor, error) {
 		&i.PeriodSigmaS,
 		&i.Readings,
 		&i.Note,
+	)
+	return i, err
+}
+
+const getCapture = `-- name: GetCapture :one
+SELECT id, created_at, anchor_id, file_sha256, source_name, started_at, ended_at, track_from, track_to, frames, encoder_readings, encoder_rate, encoder_rate_sig, encoder_rms, counts_per_turn, period_s, period_sigma_s, index_readings, index_offset, index_spread, warnings_json, notes FROM captures WHERE id = ?
+`
+
+func (q *Queries) GetCapture(ctx context.Context, id int64) (Capture, error) {
+	row := q.db.QueryRowContext(ctx, getCapture, id)
+	var i Capture
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.AnchorID,
+		&i.FileSha256,
+		&i.SourceName,
+		&i.StartedAt,
+		&i.EndedAt,
+		&i.TrackFrom,
+		&i.TrackTo,
+		&i.Frames,
+		&i.EncoderReadings,
+		&i.EncoderRate,
+		&i.EncoderRateSig,
+		&i.EncoderRms,
+		&i.CountsPerTurn,
+		&i.PeriodS,
+		&i.PeriodSigmaS,
+		&i.IndexReadings,
+		&i.IndexOffset,
+		&i.IndexSpread,
+		&i.WarningsJson,
+		&i.Notes,
 	)
 	return i, err
 }
@@ -184,6 +227,68 @@ func (q *Queries) InsertAnchor(ctx context.Context, arg InsertAnchorParams) (sql
 		arg.PeriodSigmaS,
 		arg.Readings,
 		arg.Note,
+	)
+}
+
+const insertCapture = `-- name: InsertCapture :execresult
+INSERT INTO captures (
+    created_at, anchor_id, file_sha256, source_name, started_at, ended_at, track_from, track_to,
+    frames, encoder_readings, encoder_rate, encoder_rate_sig, encoder_rms, counts_per_turn,
+    period_s, period_sigma_s, index_readings, index_offset, index_spread, warnings_json, notes
+) VALUES (
+    ?, ?, ?, ?, ?, ?, ?, ?,
+    ?, ?, ?, ?, ?, ?,
+    ?, ?, ?, ?, ?, ?, ?
+)
+`
+
+type InsertCaptureParams struct {
+	CreatedAt       string        `json:"created_at"`
+	AnchorID        sql.NullInt64 `json:"anchor_id"`
+	FileSha256      string        `json:"file_sha256"`
+	SourceName      string        `json:"source_name"`
+	StartedAt       string        `json:"started_at"`
+	EndedAt         string        `json:"ended_at"`
+	TrackFrom       string        `json:"track_from"`
+	TrackTo         string        `json:"track_to"`
+	Frames          int64         `json:"frames"`
+	EncoderReadings int64         `json:"encoder_readings"`
+	EncoderRate     float64       `json:"encoder_rate"`
+	EncoderRateSig  float64       `json:"encoder_rate_sig"`
+	EncoderRms      float64       `json:"encoder_rms"`
+	CountsPerTurn   float64       `json:"counts_per_turn"`
+	PeriodS         float64       `json:"period_s"`
+	PeriodSigmaS    float64       `json:"period_sigma_s"`
+	IndexReadings   int64         `json:"index_readings"`
+	IndexOffset     float64       `json:"index_offset"`
+	IndexSpread     float64       `json:"index_spread"`
+	WarningsJson    string        `json:"warnings_json"`
+	Notes           string        `json:"notes"`
+}
+
+func (q *Queries) InsertCapture(ctx context.Context, arg InsertCaptureParams) (sql.Result, error) {
+	return q.db.ExecContext(ctx, insertCapture,
+		arg.CreatedAt,
+		arg.AnchorID,
+		arg.FileSha256,
+		arg.SourceName,
+		arg.StartedAt,
+		arg.EndedAt,
+		arg.TrackFrom,
+		arg.TrackTo,
+		arg.Frames,
+		arg.EncoderReadings,
+		arg.EncoderRate,
+		arg.EncoderRateSig,
+		arg.EncoderRms,
+		arg.CountsPerTurn,
+		arg.PeriodS,
+		arg.PeriodSigmaS,
+		arg.IndexReadings,
+		arg.IndexOffset,
+		arg.IndexSpread,
+		arg.WarningsJson,
+		arg.Notes,
 	)
 }
 
@@ -429,6 +534,56 @@ func (q *Queries) ListAnchors(ctx context.Context, limit int64) ([]Anchor, error
 			&i.PeriodSigmaS,
 			&i.Readings,
 			&i.Note,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCaptures = `-- name: ListCaptures :many
+SELECT id, created_at, anchor_id, file_sha256, source_name, started_at, ended_at, track_from, track_to, frames, encoder_readings, encoder_rate, encoder_rate_sig, encoder_rms, counts_per_turn, period_s, period_sigma_s, index_readings, index_offset, index_spread, warnings_json, notes FROM captures ORDER BY created_at DESC, id DESC LIMIT ?
+`
+
+func (q *Queries) ListCaptures(ctx context.Context, limit int64) ([]Capture, error) {
+	rows, err := q.db.QueryContext(ctx, listCaptures, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Capture{}
+	for rows.Next() {
+		var i Capture
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.AnchorID,
+			&i.FileSha256,
+			&i.SourceName,
+			&i.StartedAt,
+			&i.EndedAt,
+			&i.TrackFrom,
+			&i.TrackTo,
+			&i.Frames,
+			&i.EncoderReadings,
+			&i.EncoderRate,
+			&i.EncoderRateSig,
+			&i.EncoderRms,
+			&i.CountsPerTurn,
+			&i.PeriodS,
+			&i.PeriodSigmaS,
+			&i.IndexReadings,
+			&i.IndexOffset,
+			&i.IndexSpread,
+			&i.WarningsJson,
+			&i.Notes,
 		); err != nil {
 			return nil, err
 		}

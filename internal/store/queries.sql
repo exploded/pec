@@ -76,3 +76,23 @@ UPDATE fits SET notes = ? WHERE id = ?;
 
 -- name: ListTableRuns :many
 SELECT * FROM runs WHERE kind = 'table' ORDER BY created_at DESC, id DESC LIMIT ?;
+
+-- name: InsertCapture :execresult
+INSERT INTO captures (
+    created_at, anchor_id, file_sha256, source_name, started_at, ended_at, track_from, track_to,
+    frames, encoder_readings, encoder_rate, encoder_rate_sig, encoder_rms, counts_per_turn,
+    period_s, period_sigma_s, index_readings, index_offset, index_spread, warnings_json, notes
+) VALUES (
+    ?, ?, ?, ?, ?, ?, ?, ?,
+    ?, ?, ?, ?, ?, ?,
+    ?, ?, ?, ?, ?, ?, ?
+);
+
+-- name: GetCapture :one
+SELECT * FROM captures WHERE id = ?;
+
+-- name: ListCaptures :many
+SELECT * FROM captures ORDER BY created_at DESC, id DESC LIMIT ?;
+
+-- name: DeleteCapture :exec
+DELETE FROM captures WHERE id = ?;

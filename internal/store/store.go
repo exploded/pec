@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/exploded/pec/internal/analysis"
+	"github.com/exploded/pec/internal/mks"
 	"github.com/exploded/pec/internal/pe"
 	"github.com/exploded/pec/internal/store/db"
 )
@@ -84,8 +85,12 @@ func (s *Store) SaveTable(ctx context.Context, res *analysis.TableResult, m Save
 	return r.LastInsertId()
 }
 
-// SaveAnchor stores a PEC index reading and returns its id.
+// SaveAnchor stores a typed PEC index reading and returns its id.
 func (s *Store) SaveAnchor(ctx context.Context, a analysis.Anchor, source, note string) (int64, error) {
+	return s.insertAnchor(ctx, a, source, note, 1)
+}
+
+func (s *Store) insertAnchor(ctx context.Context, a analysis.Anchor, source, note string, readings int) (int64, error) {
 	if source == "" {
 		source = "typed"
 	}
@@ -96,12 +101,56 @@ func (s *Store) SaveAnchor(ctx context.Context, a analysis.Anchor, source, note 
 	r, err := s.Q.InsertAnchor(ctx, db.InsertAnchorParams{
 		CreatedAt: time.Now().UTC().Format(time.RFC3339), PecIndex: int64(a.Index),
 		At: a.At.Format(time.RFC3339Nano), SigmaS: sigma, Source: source,
-		PeriodS: a.Period, PeriodSigmaS: a.PeriodSigma, Readings: 1, Note: note,
+		PeriodS: a.Period, PeriodSigmaS: a.PeriodSigma, Readings: int64(readings), Note: note,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("saving anchor: %w", err)
 	}
 	return r.LastInsertId()
+}
+
+// CaptureSaveMeta is what the caller knows about a capture.
+type CaptureSaveMeta struct {
+	FileSHA    string
+	SourceName string
+	Note       string
+}
+
+// SaveCapture stores a decoded capture and, when it produced one, its
+// anchor (source "capture", carrying the encoder-derived period). It
+// returns the anchor id (0 if none) and the capture id.
+func (s *Store) SaveCapture(ctx context.Context, r *mks.Result, m CaptureSaveMeta) (anchorID, captureID int64, err error) {
+	if r.HasAnchor {
+		a := analysis.Anchor{Index: r.AnchorIndex, At: r.AnchorAt, SigmaS: r.AnchorSigma, Period: r.Period, PeriodSigma: r.PeriodSigma}
+		note := m.Note
+		if note == "" {
+			note = "from capture " + m.SourceName
+		}
+		if anchorID, err = s.insertAnchor(ctx, a, "capture", note, r.IndexReadings); err != nil {
+			return 0, 0, err
+		}
+	}
+	rfc := func(t time.Time) string {
+		if t.IsZero() {
+			return ""
+		}
+		return t.Format(time.RFC3339Nano)
+	}
+	res, err := s.Q.InsertCapture(ctx, db.InsertCaptureParams{
+		CreatedAt: time.Now().UTC().Format(time.RFC3339), AnchorID: nullID(anchorID),
+		FileSha256: m.FileSHA, SourceName: m.SourceName,
+		StartedAt: rfc(r.Start), EndedAt: rfc(r.End), TrackFrom: rfc(r.TrackFrom), TrackTo: rfc(r.TrackTo),
+		Frames: int64(r.Frames), EncoderReadings: int64(r.EncoderReadings),
+		EncoderRate: r.EncoderRate, EncoderRateSig: r.EncoderRateSig, EncoderRms: r.EncoderRMS, CountsPerTurn: r.CountsPerTurn,
+		PeriodS: r.Period, PeriodSigmaS: r.PeriodSigma,
+		IndexReadings: int64(r.IndexReadings), IndexOffset: r.IndexOffset, IndexSpread: r.IndexSpread,
+		WarningsJson: mustJSON(r.Warnings), Notes: m.Note,
+	})
+	if err != nil {
+		return 0, 0, fmt.Errorf("saving capture: %w", err)
+	}
+	captureID, err = res.LastInsertId()
+	return anchorID, captureID, err
 }
 
 // AnchorFromRow converts a stored anchor back to the analysis type.

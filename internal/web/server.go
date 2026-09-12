@@ -123,6 +123,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /fits/{id}/pec_table.meta.json", s.fitMetaDownload)
 	mux.HandleFunc("POST /fits/{id}/delete", s.fitDelete)
 	mux.HandleFunc("POST /fits/{id}/notes", s.fitNotes)
+	mux.HandleFunc("GET /capture", s.capturePage)
+	mux.HandleFunc("POST /capture", s.captureUpload)
+	mux.HandleFunc("POST /capture/save", s.captureSave)
+	mux.HandleFunc("POST /captures/{id}/delete", s.captureDelete)
 
 	cop := http.NewCrossOriginProtection()
 	return cop.Handler(s.logging(mux))

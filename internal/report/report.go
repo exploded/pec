@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/exploded/pec/internal/analysis"
+	"github.com/exploded/pec/internal/mks"
 	"github.com/exploded/pec/internal/pe"
 	"github.com/exploded/pec/internal/tcs"
 )
@@ -39,6 +40,7 @@ const (
 	KindTable   Kind = "table"
 	KindVerify  Kind = "verify"
 	KindFit     Kind = "fit"
+	KindCapture Kind = "capture"
 )
 
 // Stat is a headline tile or a key/value row.
@@ -759,6 +761,124 @@ func onOff(b bool) string {
 		return "on"
 	}
 	return "off"
+}
+
+// BuildCapture describes a decoded USB capture: the worm period from the
+// encoder rate and the PEC index anchor.
+func BuildCapture(c *mks.Capture, r *mks.Result, sourceName string, loc *time.Location) ReportData {
+	d := ReportData{Kind: KindCapture, Title: "USB capture · " + sourceName,
+		Subtitle: fmt.Sprintf("%s to %s", r.Start.In(loc).Format("2006-01-02 15:04:05"), r.End.In(loc).Format("15:04:05")),
+		Warnings: r.Warnings}
+	ts := func(t time.Time) string { return t.In(loc).Format("15:04:05.0") }
+	if r.HasAnchor {
+		d.Verdict = Verdict{Level: r.Level,
+			Headline: fmt.Sprintf("Anchor: index %d at %s ± %.2f s · worm period %.3f ± %.4f s", r.AnchorIndex, ts(r.AnchorAt), r.AnchorSigma, r.Period, r.PeriodSigma),
+			Detail: fmt.Sprintf("The HA encoder advanced at %.3f counts/s over %.0f s of tracking with %.1f counts of scatter, which at %.0f counts per worm turn gives the period. %d PEC index readings sit %.2f steps from encoder/16 with a spread of %.2f steps, so the index is known to a fraction of a step at any instant of the capture.",
+				r.EncoderRate, r.TrackTo.Sub(r.TrackFrom).Seconds(), r.EncoderRMS, r.CountsPerTurn, r.IndexReadings, r.IndexOffset, r.IndexSpread),
+		}
+	} else {
+		d.Verdict = Verdict{Level: "bad", Headline: "No anchor from this capture",
+			Detail: fmt.Sprintf("The worm period is still measured, %.3f ± %.3f s from the encoder rate, but without PEC index readings the phase is unknown. Keep the TCS window on the Periodic Error Correction tab while capturing.", r.Period, r.PeriodSigma)}
+		if r.Period == 0 {
+			d.Verdict.Detail = "Nothing usable was decoded; see the warnings."
+		}
+	}
+	teeth := fmt.Sprintf("%.1f teeth at sidereal rate", r.TeethEstimate)
+	if math.Abs(r.TeethEstimate-576) > 1.5 {
+		teeth += " · 576 expected; ProTrack or a non-sidereal rate shifts it"
+	}
+	d.Stats = []Stat{
+		{"Worm period", fmt.Sprintf("%.3f s", r.Period), fmt.Sprintf("± %.4f s · %s", r.PeriodSigma, teeth)},
+		{"Encoder rate", fmt.Sprintf("%.3f /s", r.EncoderRate), fmt.Sprintf("%d readings · scatter %.1f counts · %d outliers", r.EncoderReadings, r.EncoderRMS, r.EncoderOutliers)},
+	}
+	if r.HasAnchor {
+		d.Stats = append(d.Stats,
+			Stat{"Anchor", fmt.Sprintf("index %d", r.AnchorIndex), fmt.Sprintf("%s ± %.2f s", r.AnchorAt.In(loc).Format("2006-01-02 15:04:05.00"), r.AnchorSigma)},
+			Stat{"Index readings", fmt.Sprintf("%d", r.IndexReadings), fmt.Sprintf("offset %.2f steps · spread %.2f", r.IndexOffset, r.IndexSpread)})
+	} else {
+		d.Stats = append(d.Stats, Stat{"Index readings", "0", "TCS window not on the PEC tab"})
+	}
+	track := "never"
+	if !r.TrackFrom.IsZero() {
+		track = fmt.Sprintf("%s to %s", ts(r.TrackFrom), ts(r.TrackTo))
+	}
+	d.Stats = append(d.Stats,
+		Stat{"Tracking", track, fmt.Sprintf("status changes: %s", statusList(r.StatusChanges))},
+		Stat{"Capture", fmt.Sprintf("%.0f s", r.Span), fmt.Sprintf("%d frames · %d junk bytes · %d unpaired", r.Frames, r.Junk, r.Unpaired)})
+
+	// Encoder residual chart with status changes marked.
+	var pts []XY
+	for _, e := range c.Encoder() {
+		if e.At.Before(r.TrackFrom) || e.At.After(r.TrackTo) {
+			continue
+		}
+		pts = append(pts, XY{e.At.Sub(r.Start).Minutes(), float64(e.Value) - r.EncoderAt(e.At)})
+	}
+	var vl []VLine
+	for _, s := range r.StatusChanges {
+		// Label only the change into tracking; the others come in a
+		// cluster during homing and their labels would overlap.
+		label := ""
+		if s.Value&mks.StatusTracking != 0 {
+			label = "tracking"
+		}
+		vl = append(vl, VLine{X: s.At.Sub(r.Start).Minutes(), Label: label})
+	}
+	if len(pts) > 0 {
+		xmax := math.Ceil(r.Span / 60)
+		svg := RenderXY([]Series{{Label: "", Color: colResidual, Pts: pts, NoLine: true}}, Axes{
+			H: 220, XMin: 0, XMax: xmax, XTicks: int(math.Min(xmax, 10)), YTicks: 4, ZeroLine: true, VLines: vl,
+			YLabel: "encoder minus fitted line, counts", XLabel: "minutes",
+			XFmt: func(v float64) string { return fmt.Sprintf("%.0f", v) },
+			YFmt: func(v float64) string { return fmt.Sprintf("%.0f", v) },
+		})
+		d.Charts = append(d.Charts, Chart{Title: "Encoder against the fitted rate",
+			Note: "Each HA encoder reading minus the straight line fitted through them. A steady rate is a flat band a few counts wide; a slope change or a step means the rate changed.",
+			SVG:  template.HTML(svg)})
+	}
+	if r.IndexReadings > 0 {
+		var ipts []XY
+		n := r.CountsPerTurn / mks.CountsPerIndex
+		for _, ix := range c.Index() {
+			if ix.At.Before(r.TrackFrom) || ix.At.After(r.TrackTo) {
+				continue
+			}
+			pred := math.Mod(r.EncoderAt(ix.At)/mks.CountsPerIndex, n)
+			dev := math.Mod(float64(ix.Value)-pred+1.5*n, n) - n/2
+			ipts = append(ipts, XY{ix.At.Sub(r.Start).Minutes(), dev - r.IndexOffset})
+		}
+		xmax := math.Ceil(r.Span / 60)
+		svg := RenderXY([]Series{{Label: "", Color: colMeasured, Pts: ipts, NoLine: true}}, Axes{
+			H: 200, XMin: 0, XMax: xmax, XTicks: int(math.Min(xmax, 10)), YMin: -2, YMax: 2, YTicks: 4, ZeroLine: true,
+			YLabel: "index reading minus encoder relation, steps", XLabel: "minutes",
+			XFmt: func(v float64) string { return fmt.Sprintf("%.0f", v) },
+			YFmt: func(v float64) string { return fmt.Sprintf("%.1f", v) },
+		})
+		d.Charts = append(d.Charts, Chart{Title: "PEC index readings against the encoder",
+			Note: fmt.Sprintf("Each index the TCS window polled, minus what the encoder relation (encoder/16 + %.2f, modulo %.0f) predicts. Readings within one step of zero confirm the relation; the anchor's timing error comes from this spread.", r.IndexOffset, n),
+			SVG:  template.HTML(svg)})
+	}
+	d.Source = []Stat{
+		{K: "File", V: sourceName},
+		{K: "Window", V: fmt.Sprintf("%s to %s (capture PC clock) · bus %d device %d", r.Start.In(loc).Format("2006-01-02 15:04:05 MST"), r.End.In(loc).Format("15:04:05"), c.Bus, c.Device)},
+		{K: "Encoder fit", V: fmt.Sprintf("%.4f ± %.4f counts/s · residual RMS %.2f counts · %.0f counts per worm turn (%d per index step)", r.EncoderRate, r.EncoderRateSig, r.EncoderRMS, r.CountsPerTurn, mks.CountsPerIndex)},
+	}
+	d.Notes = append(r.Notes, "The 16-counts-per-step relation and the tracking status bit were inferred from one capture on 2026-09-12; a capture with the PEC tab showing throughout confirms them. Nothing was sent to the mount: this is a passive USB capture.")
+	return d
+}
+
+func statusList(ch []mks.Reading) string {
+	if len(ch) == 0 {
+		return "none seen"
+	}
+	s := ""
+	for i, c := range ch {
+		if i > 0 {
+			s += " → "
+		}
+		s += fmt.Sprintf("%d", c.Value)
+	}
+	return s
 }
 
 func fitNotes(r *analysis.FitResult) []string {
