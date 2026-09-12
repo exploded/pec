@@ -2,9 +2,11 @@
 // logs, fits a correction curve, and writes a Bisque TCS PEC table to paste
 // in by hand. It never talks to the mount.
 //
-// Subcommands:
+// Usage:
 //
-//	pec serve   [-addr 127.0.0.1:8990] [-db pec.db] [-data ./data] [-tz Local]
+//	pec            serve with the defaults (what a double-click does)
+//	pec [-addr 127.0.0.1:8990] [-db pec.db] [-data ./data] [-tz Local]
+//	pec serve ...  the same, spelled out
 //	pec version
 package main
 
@@ -27,16 +29,18 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 2 {
-		usage()
+	// No subcommand, or flags only, means serve: running pec.exe from a
+	// shortcut or a double-click starts the server with the defaults.
+	cmd, args := "serve", os.Args[1:]
+	if len(args) > 0 && args[0] != "" && args[0][0] != '-' {
+		cmd, args = args[0], args[1:]
 	}
-	cmd := os.Args[1]
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	addr := fs.String("addr", "127.0.0.1:8990", "listen address (keep it on loopback)")
 	dataDir := fs.String("data", "data", "directory for uploaded files")
 	dbPath := fs.String("db", "pec.db", "SQLite history database")
 	tz := fs.String("tz", "Local", "time zone the PHD2 logs were written in (IANA name or Local)")
-	_ = fs.Parse(os.Args[2:])
+	_ = fs.Parse(args)
 
 	switch cmd {
 	case "serve":
@@ -52,7 +56,8 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: pec <serve|version> [flags]")
+	fmt.Fprintln(os.Stderr, "usage: pec [serve] [-addr 127.0.0.1:8990] [-db pec.db] [-data data] [-tz Local]")
+	fmt.Fprintln(os.Stderr, "       pec version")
 	os.Exit(2)
 }
 

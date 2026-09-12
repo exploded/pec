@@ -170,7 +170,7 @@ func (r *FitResult) Meta(info MetaInfo) Meta {
 			m.Session = &MetaSession{
 				Index: s.Index, Begins: s.Begins, ExposureMS: s.ExposureMS, PixelScale: s.PixelScale,
 				DecFactor: r.Session.DecFactor, Samples: r.Fit.N,
-				Target:  fmt.Sprintf("RA %.2f h, Dec %.1f deg, HA %.2f h, alt %.1f deg, pier %s", s.RAHours, s.DecDeg, s.HourAngle, s.AltDeg, s.PierSide),
+				Target: fmt.Sprintf("RA %.2f h, Dec %.1f deg, HA %.2f h, alt %.1f deg, pier %s", s.RAHours, s.DecDeg, s.HourAngle, s.AltDeg, s.PierSide),
 			}
 		}
 	}

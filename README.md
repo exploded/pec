@@ -11,10 +11,11 @@ talks to the mount.
 
 ```
 go build -o pec.exe ./cmd/pec
-pec.exe serve
+pec.exe
 ```
 
-Open http://127.0.0.1:8990/. Flags: `-addr`, `-db` (history database, default `pec.db`),
+Open http://127.0.0.1:8990/. Running `pec.exe` with no arguments (or double-clicking it) starts
+the server; `pec.exe serve` is the same thing spelled out. Flags: `-addr`, `-db` (history database, default `pec.db`),
 `-data` (uploads directory, default `./data`), `-tz` (zone the PHD2 logs were written in,
 default the machine's local zone).
 
