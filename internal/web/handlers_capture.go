@@ -47,14 +47,15 @@ func (s *Server) captureRows(ctx context.Context) ([]captureRow, error) {
 	if err != nil {
 		return nil, err
 	}
+	loc := s.loc(ctx)
 	out := make([]captureRow, len(rows))
 	for i, c := range rows {
 		out[i] = captureRow{Capture: c}
 		if t, err := time.Parse(time.RFC3339, c.CreatedAt); err == nil {
-			out[i].When = t.In(s.opt.Loc).Format("2006-01-02 15:04")
+			out[i].When = t.In(loc).Format("2006-01-02 15:04")
 		}
 		if t, err := time.Parse(time.RFC3339Nano, c.StartedAt); err == nil {
-			out[i].Started = t.In(s.opt.Loc).Format("2006-01-02 15:04:05")
+			out[i].Started = t.In(loc).Format("2006-01-02 15:04:05")
 		}
 	}
 	return out, nil
@@ -101,7 +102,7 @@ func (s *Server) captureUpload(w http.ResponseWriter, r *http.Request) {
 		s.problem(w, r, "capture", base, err.Error())
 		return
 	}
-	d := report.BuildCapture(c, res, name, s.opt.Loc, s.latestTable(r.Context()))
+	d := report.BuildCapture(c, res, name, s.loc(r.Context()), s.latestTable(r.Context()))
 	body, err := report.Body(d)
 	if err != nil {
 		s.fail(w, err)

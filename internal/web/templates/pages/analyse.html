@@ -1,14 +1,35 @@
 {{template "base" .}}
 {{define "content"}}
-<h1>Analyse a guide log</h1>
-<p class="lede">Upload a PHD2 guide log. Sessions are listed with what PHD2 was doing; a Guiding
-Assistant run (no corrections sent) is the intended input for a periodic-error measurement.
-The result is saved and opens on its own page.</p>
+<h1>Runs</h1>
+<p class="lede">Analyse the Guiding Assistant sessions from a PHD2 guide log. Each session is listed with what
+PHD2 was doing; a Guiding Assistant run (no corrections sent) is the intended input. The result is saved
+as a run and opens on its own page: with PEC on it says how much periodic error is left, with PEC off how
+much there is to correct.</p>
+
+{{with .Data}}
+<form class="card" hx-post="/analyse/local" hx-target="#sessions" hx-swap="innerHTML"
+      hx-status:422="target:#local-error swap:innerHTML">
+  {{if .Local}}
+  <div class="row">
+    <label>Guide log from the PHD2 folder on this PC
+      <select name="name">
+        {{range .Local}}<option value="{{.Name}}">{{.Name}} · {{.When}} · {{.Size}}{{if .Today}} · today{{end}}</option>{{end}}
+      </select>
+    </label>
+    <button type="submit" hx-disable="this">List sessions</button>
+  </div>
+  <p class="small">Newest first, from {{.PHD2Dir}} (change it under <a href="/settings">Settings</a>).</p>
+  {{else}}
+  <p class="small">No guide logs found in {{.PHD2Dir}}. Point <a href="/settings">Settings</a> at the PHD2 folder, or upload a log below.</p>
+  {{end}}
+  <div id="local-error" class="slot"></div>
+</form>
+{{end}}
 
 <form class="card" hx-post="/analyse/upload" hx-encoding="multipart/form-data"
       hx-target="#sessions" hx-swap="innerHTML" hx-status:422="target:#upload-error swap:innerHTML">
   <div class="row">
-    <label>Guide log
+    <label>Or upload a guide log
       <input type="file" name="log" accept=".txt,text/plain" required>
     </label>
     <button type="submit" hx-disable="this">List sessions</button>
@@ -16,25 +37,40 @@ The result is saved and opens on its own page.</p>
   <div id="upload-error" class="slot"></div>
 </form>
 
-{{with .Data}}
-<form class="card" hx-post="/analyse/local" hx-target="#sessions" hx-swap="innerHTML"
-      hx-status:422="target:#local-error swap:innerHTML">
-  {{if .Local}}
-  <div class="row">
-    <label>Or pick a log from the PHD2 folder on this PC
-      <select name="name">
-        {{range .Local}}<option value="{{.Name}}">{{.Name}} · {{.When}} · {{.Size}}{{if .Today}} · today{{end}}</option>{{end}}
-      </select>
-    </label>
-    <button type="submit" hx-disable="this">List sessions</button>
-  </div>
-  <p class="small">Newest first, from {{.PHD2Dir}}.</p>
-  {{else}}
-  <p class="small">No guide logs found in {{.PHD2Dir}} (start pec with -phd2 to point at another folder).</p>
-  {{end}}
-  <div id="local-error" class="slot"></div>
-</form>
-{{end}}
-
 <div id="sessions" class="slot">{{with .Data}}{{if .Sessions}}{{template "analyse/_sessions" $}}{{end}}{{end}}</div>
+
+{{with .Data}}
+<h2>Runs so far</h2>
+{{if .Runs}}
+<div class="card">
+<div class="scroll">
+<table class="runs">
+  <thead><tr><th>#</th><th>Analysed</th><th>Kind</th><th>Source</th><th>Session</th><th>Target</th><th>Alt</th><th>Pier</th><th>Period</th><th>Fundamental</th><th>Periodic RMS</th><th>Residual</th><th>PEC</th><th>Notes</th></tr></thead>
+  <tbody>
+  {{range .Runs}}
+  <tr>
+    <td><a href="/runs/{{.ID}}">{{.ID}}</a></td>
+    <td class="mono">{{.When}}</td>
+    <td>{{if eq .Kind "table"}}TCS table{{else}}guide log{{end}}</td>
+    <td class="trunc" title="{{.SourceName}}">{{.SourceName}}</td>
+    <td>{{if eq .Kind "analyse"}}{{.SessionIndex}} · <span class="mono">{{.Begins}}</span>{{end}}</td>
+    <td class="mono">{{if eq .Kind "analyse"}}{{f2 .RaHours}} h / {{f1 .DecDeg}}°{{end}}</td>
+    <td>{{if eq .Kind "analyse"}}{{f1 .AltDeg}}°{{end}}</td>
+    <td>{{.PierSide}}</td>
+    <td>{{if eq .Kind "analyse"}}{{f1 .PeriodS}} s{{if .PeriodSigmaS}} ± {{f1 .PeriodSigmaS}}{{end}}{{end}}</td>
+    <td>{{f3 .Amp1Arcsec}}″</td>
+    <td>{{f2 .PeriodicRms}}″</td>
+    <td>{{if eq .Kind "analyse"}}{{f2 .ResidualRms}}″{{end}}</td>
+    <td>{{.PecText}}</td>
+    <td class="trunc" title="{{.Notes}}">{{.Notes}}</td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+</div>
+{{else}}
+<p class="small">No runs yet. Pick a PEC-off and a PEC-on session under <a href="/verify">Verify</a> once two are analysed.</p>
+{{end}}
+{{end}}
 {{end}}

@@ -38,11 +38,12 @@ func (s *Server) anchorRows(ctx context.Context) ([]anchorRow, error) {
 	if err != nil {
 		return nil, err
 	}
+	loc := s.loc(ctx)
 	out := make([]anchorRow, len(rows))
 	for i, a := range rows {
 		out[i] = anchorRow{Anchor: a}
 		if t, err := time.Parse(time.RFC3339Nano, a.At); err == nil {
-			out[i].AtText = t.In(s.opt.Loc).Format("2006-01-02 15:04:05")
+			out[i].AtText = t.In(loc).Format("2006-01-02 15:04:05")
 			out[i].Ago = ago(time.Since(t))
 		}
 	}
@@ -72,7 +73,7 @@ func (s *Server) anchorPage(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	s.page(w, r, "anchor", "", pageData{Title: "Anchor the PEC index", Nav: "anchor", Data: v})
+	s.page(w, r, "anchor", "", pageData{Title: "Anchor the PEC index", Nav: "capture", Data: v})
 }
 
 // anchorList answers a mutation with the refreshed list fragment, or a
@@ -87,13 +88,13 @@ func (s *Server) anchorList(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	s.render(w, http.StatusOK, "anchor", "anchor/_list", pageData{Nav: "anchor", Data: v})
+	s.render(w, http.StatusOK, "anchor", "anchor/_list", pageData{Nav: "capture", Data: v})
 }
 
 // anchorCreate stamps the server clock unless a time was typed.
 func (s *Server) anchorCreate(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
-	base := pageData{Nav: "anchor"}
+	base := pageData{Nav: "capture"}
 	_ = r.ParseForm()
 	idx, err := strconv.Atoi(strings.TrimSpace(r.FormValue("index")))
 	if err != nil || idx < 0 || idx >= s.opt.TCS.Entries {
@@ -108,7 +109,7 @@ func (s *Server) anchorCreate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if v := strings.TrimSpace(r.FormValue("at")); v != "" {
-		t, err := parseLocal(v, s.opt.Loc)
+		t, err := parseLocal(v, s.loc(r.Context()))
 		if err != nil {
 			s.problem(w, r, "anchor", base, "the time must look like 2026-09-12T21:03:04 (local time)")
 			return
@@ -160,6 +161,7 @@ type fitView struct {
 	Anchors []anchorRow
 	Fits    []fitRow
 	Params  analysis.FitParams
+	Table   tableView // the "record the mount's current table" card
 
 	Mode                     string
 	RunID, TableID, AnchorID int64
@@ -171,32 +173,33 @@ type fitView struct {
 	Fit   fitRow
 }
 
-func (s *Server) fitRow(f db.Fit) fitRow {
+func fitRowIn(loc *time.Location, f db.Fit) fitRow {
 	row := fitRow{Fit: f, ModeText: "guide log + anchor"}
 	if f.Mode == analysis.ModeTCS {
 		row.ModeText = "TCS recording"
 	}
 	if t, err := time.Parse(time.RFC3339, f.CreatedAt); err == nil {
-		row.When = t.In(s.opt.Loc).Format("2006-01-02 15:04")
+		row.When = t.In(loc).Format("2006-01-02 15:04")
 	}
 	return row
 }
 
 func (s *Server) fitData(ctx context.Context) (fitView, error) {
-	v := fitView{Params: analysis.DefaultFitParams()}
+	v := fitView{Params: analysis.DefaultFitParams(), Table: tableView{Harmonics: 6, ArcsecPerTick: s.opt.TCS.ArcsecPerTick}}
+	loc := s.loc(ctx)
 	runs, err := s.st.Q.ListAnalyseRuns(ctx, 200)
 	if err != nil {
 		return v, err
 	}
 	for _, r := range runs {
-		v.Runs = append(v.Runs, s.runRow(r))
+		v.Runs = append(v.Runs, runRowIn(loc, r))
 	}
 	tables, err := s.st.Q.ListTableRuns(ctx, 200)
 	if err != nil {
 		return v, err
 	}
 	for _, r := range tables {
-		v.Tables = append(v.Tables, s.runRow(r))
+		v.Tables = append(v.Tables, runRowIn(loc, r))
 	}
 	if v.Anchors, err = s.anchorRows(ctx); err != nil {
 		return v, err
@@ -206,7 +209,7 @@ func (s *Server) fitData(ctx context.Context) (fitView, error) {
 		return v, err
 	}
 	for _, f := range fits {
-		v.Fits = append(v.Fits, s.fitRow(f))
+		v.Fits = append(v.Fits, fitRowIn(loc, f))
 	}
 	return v, nil
 }
@@ -315,7 +318,7 @@ func (s *Server) computeFit(r *http.Request) (*fitContext, error) {
 		if err != nil {
 			return nil, err
 		}
-		sres, err := s.refitSession(run, nil)
+		sres, err := s.refitSession(r.Context(), run, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -326,7 +329,7 @@ func (s *Server) computeFit(r *http.Request) (*fitContext, error) {
 		}
 		return &fitContext{
 			Res: res, RunID: run.ID, AnchorID: a.ID, FileSHA: run.FileSha256, SourceName: run.SourceName,
-			PhaseRef: fmt.Sprintf("index %d at %s", a.Index, a.At.In(s.opt.Loc).Format("2006-01-02 15:04:05")),
+			PhaseRef: fmt.Sprintf("index %d at %s", a.Index, a.At.In(s.loc(r.Context())).Format("2006-01-02 15:04:05")),
 		}, nil
 	}
 	return nil, errNoPhaseRef
@@ -339,7 +342,7 @@ func (s *Server) fitPreview(w http.ResponseWriter, r *http.Request) {
 		s.problem(w, r, "fit", base, err.Error())
 		return
 	}
-	d := report.BuildFit(c.Res, c.SourceName, s.opt.Loc)
+	d := report.BuildFit(c.Res, c.SourceName, s.loc(r.Context()))
 	body, err := report.Body(d)
 	if err != nil {
 		s.fail(w, err)
@@ -383,7 +386,7 @@ func (s *Server) loadFit(r *http.Request) (db.Fit, error) {
 
 // rebuildFit recomputes a saved fit from its source file and stored meta,
 // so the page has charts even after the run or anchor has been deleted.
-func (s *Server) rebuildFit(f db.Fit) (*analysis.FitResult, error) {
+func (s *Server) rebuildFit(ctx context.Context, f db.Fit) (*analysis.FitResult, error) {
 	var m analysis.Meta
 	if err := jsonInto(f.MetaJson, &m); err != nil {
 		return nil, fmt.Errorf("stored meta: %w", err)
@@ -410,7 +413,7 @@ func (s *Server) rebuildFit(f db.Fit) (*analysis.FitResult, error) {
 		if m.Session == nil || m.PhaseRef.At == nil {
 			return nil, errors.New("stored meta lacks the session or anchor")
 		}
-		l, err := phd2.ParseFile(path, s.opt.Loc)
+		l, err := phd2.ParseFile(path, s.loc(ctx))
 		if err != nil {
 			return nil, fmt.Errorf("the stored log file is missing or unreadable: %w", err)
 		}
@@ -446,13 +449,13 @@ func (s *Server) fitViewPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	v := fitView{Fit: s.fitRow(f)}
-	res, err := s.rebuildFit(f)
+	v := fitView{Fit: fitRowIn(s.loc(r.Context()), f)}
+	res, err := s.rebuildFit(r.Context(), f)
 	if err != nil {
 		s.render(w, http.StatusUnprocessableEntity, "fit_view", "base", pageData{Title: "Fit", Nav: "fit", Error: err.Error(), Data: v})
 		return
 	}
-	d := report.BuildFit(res, f.SourceName, s.opt.Loc)
+	d := report.BuildFit(res, f.SourceName, s.loc(r.Context()))
 	body, err := report.Body(d)
 	if err != nil {
 		s.fail(w, err)

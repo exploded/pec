@@ -1,30 +1,37 @@
 {{template "base" .}}
 {{define "content"}}
-<h1>Tonight</h1>
+<h1>Record</h1>
 <p class="lede">The measuring night, start to finish. Tick things off as you go; the ticks are kept in this
-browser until you press Reset. Nothing on this page talks to the mount.</p>
+browser until you press Reset. Items marked <span class="tag">new table</span> are only needed when fitting
+a new table; a check of the current PEC skips them. Nothing on this page talks to the mount.</p>
+
+<div class="row" id="mode-toggle">
+  <span class="small">I am</span>
+  <button type="button" class="small-btn mode" data-mode="check">checking my PEC</button>
+  <button type="button" class="small-btn mode" data-mode="table">fitting a new table</button>
+</div>
 
 <div class="card">
 <ol class="checklist" id="checklist">
-  <li><label><input type="checkbox" data-step="site"> <b>Site.</b> On <a href="/target">Target</a>, read the site from NINA or type it. Once.</label></li>
+  <li><label><input type="checkbox" data-step="site"> <b>Site.</b> On <a href="/target">Point</a>, read the site from NINA or type it. Once.</label></li>
   <li><label><input type="checkbox" data-step="home"> <b>Roof open, mount homed, tracking sidereal.</b> Turn <b>ProTrack off</b> for the whole session: the period comes from the encoder rate in the capture, so the runs and the capture must track the same way.</label></li>
-  <li><label><input type="checkbox" data-step="slew"> <b>Slew</b> to the star <a href="/target">Target</a> names: TheSkyX Find, type the name, Slew. Check the hour angle is between −1 and −2 h. No more slews until both runs are done.</label></li>
-  <li><label><input type="checkbox" data-step="wireshark"> <b>Wireshark.</b> Start a capture on the USBPcap interface now and leave it running to the end.</label></li>
-  <li><label><input type="checkbox" data-step="tcs"> <b>TCS window</b> open on the <b>Periodic Error Correction</b> tab, and leave that tab showing all night. That is what makes TheSkyX poll the PEC index.</label></li>
-  <li><label><input type="checkbox" data-step="get"> <b>Get</b> once in that tab so the table shows (a read only). Copy is optional. Never Paste, Clear or Save To Mount tonight.</label></li>
+  <li><label><input type="checkbox" data-step="slew"> <b>Slew</b> to the star <a href="/target">Point</a> names: TheSkyX Find, type the name, Slew. Check the hour angle is between −1 and −2 h. No more slews until the runs are done.</label></li>
+  <li data-mode="table"><label><input type="checkbox" data-step="wireshark"> <b>Wireshark.</b> Start a capture on the USBPcap interface now and leave it running to the end. <span class="tag">new table</span></label></li>
+  <li data-mode="table"><label><input type="checkbox" data-step="tcs"> <b>TCS window</b> open on the <b>Periodic Error Correction</b> tab, and leave that tab showing all night. That is what makes TheSkyX poll the PEC index. <span class="tag">new table</span></label></li>
+  <li data-mode="table"><label><input type="checkbox" data-step="get"> <b>Get</b> once in that tab so the table shows (a read only). Copy is optional. Never Paste, Clear or Save To Mount tonight. <span class="tag">new table</span></label></li>
   <li><label><input type="checkbox" data-step="filter"> <b>NINA: select the L filter.</b> Connect only the filter wheel; leave the camera and mount to PHD2 and TheSkyX.</label></li>
   <li><label><input type="checkbox" data-step="focus"> <b>Focus.</b> Autofocus in NINA (focuser only; tracking and the capture carry on). In PHD2 the star profile should have one sharp peak and SNR above about 30. Donuts or a flat top mean refocus before the run.</label></li>
-  <li><label><input type="checkbox" data-step="pecoff"> <b>PEC off</b> in that tab.</label></li>
+  <li><label><input type="checkbox" data-step="pecoff"> <b>PEC off</b> in the TCS Periodic Error Correction tab (Apply PEC unticked).</label></li>
   <li><label><input type="checkbox" data-step="run1"> <b>PHD2 run 1.</b> Camera and mount connected, 2 to 3 s exposures, a fainter star than the named one, calibrate if asked. <b>Guiding Assistant</b> with <b>Measure Declination Backlash</b> unticked, for at least 8 min (10 is better), no dithering, then stop. Close its results without applying anything.</label></li>
-  <li><label><input type="checkbox" data-step="pecon"> <b>PEC on</b> in the TCS tab.</label></li>
-  <li><label><input type="checkbox" data-step="run2"> <b>PHD2 run 2.</b> Same star, Guiding Assistant again, same length.</label></li>
+  <li><label><input type="checkbox" data-step="pecon"> <b>PEC on</b> in the TCS tab (Apply PEC ticked).</label></li>
+  <li><label><input type="checkbox" data-step="run2"> <b>PHD2 run 2.</b> Same star, Guiding Assistant again, same length. For a check this is the run that matters.</label></li>
   <li><label><input type="checkbox" data-step="run3"> <b>Optional run 3</b> with PEC off again, for repeatability.</label></li>
-  <li><label><input type="checkbox" data-step="stop"> <b>Stop Wireshark</b> and save the capture as pcapng. Note where PHD2 wrote tonight's guide log (Documents, PHD2).</label></li>
-  <li><label><input type="checkbox" data-step="analyse"> <b><a href="/analyse">Analyse log</a></b>: the PEC-off session marked PEC off, then the PEC-on session marked PEC on.</label></li>
+  <li data-mode="table"><label><input type="checkbox" data-step="stop"> <b>Stop Wireshark</b> and save the capture as pcapng. <span class="tag">new table</span></label></li>
+  <li><label><input type="checkbox" data-step="analyse"> <b><a href="/analyse">Runs</a></b>: analyse the PEC-off session marked PEC off, then the PEC-on session marked PEC on. The PEC-on run's page says how much error is left.</label></li>
   <li><label><input type="checkbox" data-step="verify"> <b><a href="/verify">Verify</a></b> with before = off, after = on.</label></li>
-  <li><label><input type="checkbox" data-step="capture"> <b><a href="/capture">Capture</a></b>: upload the pcapng and save it. That creates the anchor and the period.</label></li>
-  <li><label><input type="checkbox" data-step="fit"> <b><a href="/fit">Fit</a></b> the PEC-off run with that anchor. The phase budget must be under 20°.</label></li>
-  <li><label><input type="checkbox" data-step="review"> <b>Nothing is pasted into the TCS tonight.</b> Review the fit first.</label></li>
+  <li data-mode="table"><label><input type="checkbox" data-step="capture"> <b><a href="/capture">Capture</a></b>: upload the pcapng and save it. That creates the anchor and the period. <span class="tag">new table</span></label></li>
+  <li data-mode="table"><label><input type="checkbox" data-step="fit"> <b><a href="/fit">Fit</a></b> the PEC-off run with that anchor. The phase budget must be under 20°. <span class="tag">new table</span></label></li>
+  <li data-mode="table"><label><input type="checkbox" data-step="review"> <b>Review the fit before pasting.</b> Pasting is by hand in the TCS: Paste, Save To Mount, Get, then Apply PEC on and one more Guiding Assistant run to Verify. Keep the old table's text file so it can go back. <span class="tag">new table</span></label></li>
 </ol>
 <div class="row">
   <button type="button" class="small-btn" id="reset">Reset ticks</button>
@@ -34,22 +41,31 @@ browser until you press Reset. Nothing on this page talks to the mount.</p>
 
 <script>
 (() => {
-  const key = "pec.tonight";
+  const key = "pec.tonight", modeKey = "pec.mode";
   const boxes = [...document.querySelectorAll("#checklist input[type=checkbox]")];
-  let done = {};
-  try { done = JSON.parse(localStorage.getItem(key) || "{}"); } catch (e) {}
+  let done = {}, mode = "table";
+  try { done = JSON.parse(localStorage.getItem(key) || "{}"); mode = localStorage.getItem(modeKey) || "table"; } catch (e) {}
+  const visible = () => boxes.filter(b => !b.closest("li").hidden);
   const paint = () => {
+    document.body.dataset.mode = mode;
+    for (const li of document.querySelectorAll("#checklist li")) li.hidden = mode === "check" && li.dataset.mode === "table";
+    for (const b of document.querySelectorAll("#mode-toggle .mode")) b.classList.toggle("selected", b.dataset.mode === mode);
     let n = 0;
     for (const b of boxes) {
       b.checked = !!done[b.dataset.step];
       b.closest("li").classList.toggle("done", b.checked);
-      if (b.checked) n++;
     }
-    document.getElementById("progress").textContent = n + " of " + boxes.length + " done";
+    for (const b of visible()) if (b.checked) n++;
+    document.getElementById("progress").textContent = n + " of " + visible().length + " done";
   };
   for (const b of boxes) b.addEventListener("change", () => {
     done[b.dataset.step] = b.checked;
     try { localStorage.setItem(key, JSON.stringify(done)); } catch (e) {}
+    paint();
+  });
+  for (const b of document.querySelectorAll("#mode-toggle .mode")) b.addEventListener("click", () => {
+    mode = b.dataset.mode;
+    try { localStorage.setItem(modeKey, mode); } catch (e) {}
     paint();
   });
   document.getElementById("reset").addEventListener("click", () => {

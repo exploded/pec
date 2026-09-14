@@ -24,11 +24,18 @@ Everything is `go:embed`-ed (templates, CSS, schema); the deployable is `pec.exe
 
 ```
 sqlc generate             after editing internal/store/queries.sql or schema.sql
-build.bat                 vet + test + build pec.exe
-pec.exe                   http://127.0.0.1:8990/  (-addr, -db pec.db, -data ./data, -tz Local, -phd2 Documents/PHD2);
-                          no subcommand or flags only = serve, so a double-click works
-pec.exe version           VCS revision from the Go toolchain (no ldflags)
+build.bat                 vet + test + build pec.exe (go build in the root does the same build)
+pec.exe                   serves http://127.0.0.1:8990/, opens the browser, keeps pec.db and data\ beside
+                          the executable; a second start just opens the browser. No subcommands.
+pec.exe -addr 127.0.0.1:8999 -db <scratch>\pec.db -data <scratch>\data
+                          developer flags for a test instance (the only flags there are)
 ```
+
+Everything a user can change is on the Settings page (PHD2 folder, NINA folder, log time
+zone, site), stored in the `settings` table and read per request through `s.phd2Dir(ctx)`,
+`s.ninaDir(ctx)`, `s.loc(ctx)` (`internal/web/settings.go`). `web.Options` holds the defaults;
+tests set `Options` and never write the settings table. The version in the footer comes from
+`debug.ReadBuildInfo` (no ldflags, no version command).
 
 ## sqlc
 
@@ -44,7 +51,7 @@ James runs his own instance; to test a change, run a second instance on another 
 ## Layout
 
 ```
-cmd/pec/            subcommand dispatch (flag.NewFlagSet per command)
+main.go             flags -addr/-db/-data only, executable-dir defaults, port-busy check, opens the browser
 internal/phd2/      PHD2 guide-log parser: sessions, samples, INFO events, DROP rows
 internal/tcs/       TCS PEC table read/write, ticks <-> arcsec, quantisation
 internal/pe/        the numerics: segmentation, Householder QR, joint LS fit, periodogram, DFT
@@ -58,7 +65,8 @@ internal/report/    ReportData builders, Go-generated inline SVG (svg.go), repor
                     body.tmpl (embedded in pages) and page.tmpl (standalone download)
 internal/store/     schema.sql, queries.sql, open.go, store.go (save helpers), db/ (sqlc)
 internal/web/       http server, handlers (handlers.go analyse/table, handlers_runs.go runs/verify,
-                    handlers_fit.go anchor/fit/fits, handlers_target.go where to point), embedded templates and static files
+                    handlers_fit.go anchor/fit/fits, handlers_target.go where to point, handlers_start.go the
+                    step list with live status, settings.go), embedded templates and static files
 testdata/           real guide-log excerpt (4 sessions) and the real TCS table
 ```
 
@@ -130,6 +138,16 @@ synthetic capture for tests; the real capture lives in `.local/cpature.pcapng` (
 NINA" parses the newest `.profile` in `%LOCALAPPDATA%\NINA\Profiles` (current NINA writes XML;
 a 0, 0 site is rejected). Never writes to NINA or TheSkyX.
 
+## UI sequence
+
+The nav is the workflow: Start · 1 Point (/target) · 2 Record (/tonight) · 3 Capture · 4 Runs
+(/analyse, with the runs table) · 5 Verify · 6 Fit (with the TCS table upload card) · Settings.
+`startData` derives each step's status from the list queries and picks the next step; the
+"Check my PEC" / "Fit a new table" choice is browser-local (`localStorage` key `pec.mode`) and
+only hides the capture/fit items. /table and /anchor keep working but are reached from Fit and
+Capture, not the nav. Nav keys: home, target, tonight, capture (anchor pages too), analyse (run
+pages too), verify, fit (table pages too), settings.
+
 ## Gotchas
 
 - `//go:embed all:templates`: fragment templates start with `_` and a plain directory embed
@@ -140,4 +158,8 @@ a 0, 0 site is rejected). Never writes to NINA or TheSkyX.
 - Never commit `.local/`, `data/`, `*.db*`.
 - Asset URLs carry `?v=<hash of embedded static files>` (`assetTag`); without it Chrome kept a
   stale `app.css` across rebuilds despite `Cache-Control: no-cache`.
+- Defaults come from `os.Executable()`, so `go run .` would put `pec.db` in the temp build dir;
+  always pass `-db`/`-data` when developing, and use port 8999 with scratch paths.
+- html/template escapes apostrophes in status strings (`'` becomes `&#39;`); tests that grep
+  page text must avoid them.
 - Bash heredocs on this machine fail on non-ASCII (°, ±, ″); write such Go files with the Write tool.

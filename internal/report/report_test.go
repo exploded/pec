@@ -33,7 +33,7 @@ func fixtureSession(t *testing.T, n int) *analysis.SessionResult {
 
 func TestAnalyseReport(t *testing.T) {
 	res := fixtureSession(t, 2)
-	d := BuildAnalyse(res, tcs.DefaultConfig(), "log.txt")
+	d := BuildAnalyse(res, tcs.DefaultConfig(), "log.txt", nil)
 	d.Version = "test"
 	html, err := Render(d)
 	if err != nil {
@@ -53,7 +53,7 @@ func TestAnalyseReport(t *testing.T) {
 	}
 	// Dithered session gets dither markers on the residual chart.
 	res4 := fixtureSession(t, 4)
-	d4 := BuildAnalyse(res4, tcs.DefaultConfig(), "log.txt")
+	d4 := BuildAnalyse(res4, tcs.DefaultConfig(), "log.txt", nil)
 	if !strings.Contains(string(d4.Charts[1].SVG), "dither") {
 		t.Error("residual chart should mark dithers")
 	}

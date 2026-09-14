@@ -88,7 +88,7 @@ func get(t *testing.T, ts *httptest.Server, path string) (*http.Response, string
 
 func TestPagesRender(t *testing.T) {
 	ts := newTestServer(t)
-	for _, p := range []string{"/", "/analyse", "/table", "/verify", "/anchor", "/fit", "/capture", "/report.css", "/static/css/app.css", "/static/js/htmx.min.js"} {
+	for _, p := range []string{"/", "/analyse", "/table", "/verify", "/anchor", "/fit", "/capture", "/target", "/tonight", "/settings", "/report.css", "/static/css/app.css", "/static/js/htmx.min.js"} {
 		resp, _ := get(t, ts, p)
 		if resp.StatusCode != 200 {
 			t.Errorf("%s: status %d", p, resp.StatusCode)
@@ -138,9 +138,16 @@ func TestAnalyseFlow(t *testing.T) {
 	if resp.StatusCode != 200 || !strings.HasPrefix(rep, "<!DOCTYPE html>") || !strings.Contains(rep, "<style>") || strings.Contains(rep, "/report.css") {
 		t.Errorf("standalone report: status %d", resp.StatusCode)
 	}
-	_, index := get(t, ts, "/")
-	if !strings.Contains(index, "first light") || !strings.Contains(index, "guide log") {
-		t.Error("index lacks the run")
+	_, runs := get(t, ts, "/analyse")
+	if !strings.Contains(runs, "first light") || !strings.Contains(runs, "guide log") {
+		t.Error("runs page lacks the run")
+	}
+	_, start := get(t, ts, "/")
+	if !strings.Contains(start, "1 PEC off") || !strings.Contains(start, "Next:") {
+		t.Errorf("start page lacks the run status: %s", start)
+	}
+	if !strings.Contains(page, "With PEC off") {
+		t.Error("PEC-off run page lacks the 'to correct' headline")
 	}
 
 	// Notes update.
@@ -152,6 +159,9 @@ func TestAnalyseFlow(t *testing.T) {
 	if !strings.Contains(page, `value="edited"`) || !strings.Contains(page, `value="on" selected`) {
 		t.Error("notes not updated")
 	}
+	if !strings.Contains(page, "With PEC on") || !strings.Contains(page, "remains") {
+		t.Error("PEC-on run page lacks the 'remains' headline")
+	}
 
 	// Validation error path returns 422 with the problem fragment.
 	sha := regexp.MustCompile(`[0-9a-f]{64}`).FindString(body)
@@ -162,8 +172,8 @@ func TestAnalyseFlow(t *testing.T) {
 
 	// Delete.
 	resp, _ = postForm(t, ts, runURL+"/delete", nil)
-	if resp.StatusCode != 200 || resp.Header.Get("HX-Redirect") != "/" {
-		t.Errorf("delete: %d", resp.StatusCode)
+	if resp.StatusCode != 200 || resp.Header.Get("HX-Redirect") != "/analyse" {
+		t.Errorf("delete: %d %q", resp.StatusCode, resp.Header.Get("HX-Redirect"))
 	}
 	resp, _ = get(t, ts, runURL)
 	if resp.StatusCode != 404 {

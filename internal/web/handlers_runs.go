@@ -33,20 +33,22 @@ func (s *Server) runRows(ctx context.Context, limit int64) ([]runRow, error) {
 	if err != nil {
 		return nil, err
 	}
+	loc := s.loc(ctx)
 	rows := make([]runRow, len(runs))
 	for i, r := range runs {
-		rows[i] = s.runRow(r)
+		rows[i] = runRowIn(loc, r)
 	}
 	return rows, nil
 }
 
-func (s *Server) runRow(r db.Run) runRow {
+// runRowIn formats a run for the UI zone.
+func runRowIn(loc *time.Location, r db.Run) runRow {
 	row := runRow{Run: r, Kind: r.Kind, PecText: "?"}
 	if t, err := time.Parse(time.RFC3339, r.CreatedAt); err == nil {
-		row.When = t.In(s.opt.Loc).Format("2006-01-02 15:04")
+		row.When = t.In(loc).Format("2006-01-02 15:04")
 	}
 	if t, err := time.Parse(time.RFC3339, r.SessionBegins); err == nil {
-		row.Begins = t.In(s.opt.Loc).Format("2006-01-02 15:04")
+		row.Begins = t.In(loc).Format("2006-01-02 15:04")
 	}
 	if v := store.PecOn(r.PecOn); v != nil {
 		if *v {
@@ -56,19 +58,6 @@ func (s *Server) runRow(r db.Run) runRow {
 		}
 	}
 	return row
-}
-
-type indexView struct {
-	Runs []runRow
-}
-
-func (s *Server) index(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.runRows(r.Context(), 200)
-	if err != nil {
-		s.fail(w, err)
-		return
-	}
-	s.page(w, r, "index", "", pageData{Title: "Runs", Nav: "home", Data: indexView{Runs: rows}})
 }
 
 // --- Run detail -------------------------------------------------------------
@@ -97,7 +86,7 @@ func (s *Server) loadRun(r *http.Request) (db.Run, error) {
 // refitSession re-runs the stored analysis from the stored file so charts
 // and comparisons come from the same samples. override tweaks the stored
 // parameters (Verify pins the period).
-func (s *Server) refitSession(run db.Run, override func(*analysis.Params)) (*analysis.SessionResult, error) {
+func (s *Server) refitSession(ctx context.Context, run db.Run, override func(*analysis.Params)) (*analysis.SessionResult, error) {
 	if run.Kind != "analyse" {
 		return nil, errors.New("not a guide-log run")
 	}
@@ -108,7 +97,7 @@ func (s *Server) refitSession(run db.Run, override func(*analysis.Params)) (*ana
 	if override != nil {
 		override(&p)
 	}
-	l, err := phd2.ParseFile(s.filePath(run.FileSha256), s.opt.Loc)
+	l, err := phd2.ParseFile(s.filePath(run.FileSha256), s.loc(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("the stored log file is missing or unreadable: %w", err)
 	}
@@ -119,14 +108,14 @@ func (s *Server) refitSession(run db.Run, override func(*analysis.Params)) (*ana
 	return analysis.Session(sess, p)
 }
 
-func (s *Server) buildRun(run db.Run) (report.ReportData, error) {
+func (s *Server) buildRun(ctx context.Context, run db.Run) (report.ReportData, error) {
 	switch run.Kind {
 	case "analyse":
-		res, err := s.refitSession(run, nil)
+		res, err := s.refitSession(ctx, run, nil)
 		if err != nil {
 			return report.ReportData{}, err
 		}
-		return report.BuildAnalyse(res, s.opt.TCS, run.SourceName), nil
+		return report.BuildAnalyse(res, s.opt.TCS, run.SourceName, store.PecOn(run.PecOn)), nil
 	case "table":
 		tbl, err := tcs.ReadFile(s.filePath(run.FileSha256))
 		if err != nil {
@@ -154,9 +143,10 @@ func (s *Server) runPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	d, err := s.buildRun(run)
+	loc := s.loc(r.Context())
+	d, err := s.buildRun(r.Context(), run)
 	if err != nil {
-		s.render(w, http.StatusUnprocessableEntity, "run", "base", pageData{Title: "Run", Nav: "home", Error: err.Error(), Data: runView{Run: s.runRow(run)}})
+		s.render(w, http.StatusUnprocessableEntity, "run", "base", pageData{Title: "Run", Nav: "analyse", Error: err.Error(), Data: runView{Run: runRowIn(loc, run)}})
 		return
 	}
 	body, err := report.Body(d)
@@ -164,7 +154,7 @@ func (s *Server) runPage(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	v := runView{Run: s.runRow(run), Body: body, Notes: run.Notes, Cfg: s.opt.TCS, IsTable: run.Kind == "table"}
+	v := runView{Run: runRowIn(loc, run), Body: body, Notes: run.Notes, Cfg: s.opt.TCS, IsTable: run.Kind == "table"}
 	if p := store.PecOn(run.PecOn); p != nil {
 		if *p {
 			v.PecOn = "on"
@@ -172,7 +162,7 @@ func (s *Server) runPage(w http.ResponseWriter, r *http.Request) {
 			v.PecOn = "off"
 		}
 	}
-	s.page(w, r, "run", "", pageData{Title: d.Title, Nav: "home", Data: v})
+	s.page(w, r, "run", "", pageData{Title: d.Title, Nav: "analyse", Data: v})
 }
 
 func (s *Server) runReport(w http.ResponseWriter, r *http.Request) {
@@ -181,13 +171,13 @@ func (s *Server) runReport(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	d, err := s.buildRun(run)
+	d, err := s.buildRun(r.Context(), run)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
 	d.Version = s.opt.Version
-	d.Generated = time.Now().In(s.opt.Loc)
+	d.Generated = time.Now().In(s.loc(r.Context()))
 	out, err := report.Render(d)
 	if err != nil {
 		s.fail(w, err)
@@ -208,7 +198,7 @@ func (s *Server) runDelete(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	redirect(w, r, "/")
+	redirect(w, r, "/analyse")
 }
 
 func (s *Server) runNotes(w http.ResponseWriter, r *http.Request) {
@@ -247,8 +237,9 @@ func (s *Server) verifyPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	v := verifyView{}
+	loc := s.loc(r.Context())
 	for _, run := range runs {
-		v.Runs = append(v.Runs, s.runRow(run))
+		v.Runs = append(v.Runs, runRowIn(loc, run))
 	}
 	v.Before, _ = strconv.ParseInt(r.URL.Query().Get("before"), 10, 64)
 	v.After, _ = strconv.ParseInt(r.URL.Query().Get("after"), 10, 64)
@@ -278,17 +269,17 @@ func (s *Server) verifyRun(w http.ResponseWriter, r *http.Request) {
 		s.problem(w, r, "verify", base, "after run not found")
 		return
 	}
-	before, err := s.refitSession(rb, nil)
+	before, err := s.refitSession(r.Context(), rb, nil)
 	if err != nil {
 		s.problem(w, r, "verify", base, "before: "+err.Error())
 		return
 	}
-	afterFree, err := s.refitSession(ra, nil)
+	afterFree, err := s.refitSession(r.Context(), ra, nil)
 	if err != nil {
 		s.problem(w, r, "verify", base, "after: "+err.Error())
 		return
 	}
-	after, err := s.refitSession(ra, func(p *analysis.Params) { p.Period = before.Fit.Period })
+	after, err := s.refitSession(r.Context(), ra, func(p *analysis.Params) { p.Period = before.Fit.Period })
 	if err != nil {
 		s.problem(w, r, "verify", base, "after: "+err.Error())
 		return
@@ -298,9 +289,10 @@ func (s *Server) verifyRun(w http.ResponseWriter, r *http.Request) {
 		free = afterFree.Fit.Period
 	}
 	v := pe.Verify(before.Fit, after.Fit, free)
+	loc := s.loc(r.Context())
 	d := report.BuildVerify(v,
-		report.VerifyInput{Label: runLabel(s.runRow(rb)), Res: before},
-		report.VerifyInput{Label: runLabel(s.runRow(ra)), Res: after}, s.opt.TCS)
+		report.VerifyInput{Label: runLabel(runRowIn(loc, rb)), Res: before},
+		report.VerifyInput{Label: runLabel(runRowIn(loc, ra)), Res: after}, s.opt.TCS)
 	body, err := report.Body(d)
 	if err != nil {
 		s.fail(w, err)

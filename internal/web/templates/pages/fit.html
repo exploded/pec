@@ -6,6 +6,8 @@
 Preview first; nothing is saved until you press Save. Nothing is ever sent to the mount.</p>
 
 {{with .Data}}
+{{template "table/_form" .Table}}
+
 <form id="fit-form" class="card" hx-post="/fit/preview" hx-target="#fit-preview" hx-swap="innerHTML show:#fit-preview:top"
       hx-status:422="target:#fit-error swap:innerHTML">
   <fieldset class="mode">
@@ -21,7 +23,7 @@ Preview first; nothing is saved until you press Save. Nothing is ever sent to th
         </select>
       </label>
       {{else}}
-      <p class="small">No TCS tables analysed yet. <a href="/table">Upload the recording</a> on the TCS table page first.</p>
+      <p class="small">No TCS tables analysed yet. Upload the recording in the card above first.</p>
       {{end}}
     </div>
 
@@ -44,7 +46,7 @@ Preview first; nothing is saved until you press Save. Nothing is ever sent to th
         </select>
       </label>
       {{else}}
-      <p class="small">No anchors yet. <a href="/anchor">Add one</a> while the TCS window shows the index.</p>
+      <p class="small">No anchors yet. Upload a USB capture on the <a href="/capture">Capture</a> page, or <a href="/anchor">type one</a> while the TCS window shows the index.</p>
       {{end}}
       <label>Period (s; 0 = the run's own fit) <input type="number" name="period" value="0" step="0.01" min="0"></label>
       <label>Period uncertainty (s) <input type="number" name="period_sigma" value="0" step="0.01" min="0"></label>

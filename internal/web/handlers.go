@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -28,6 +29,7 @@ type analyseView struct {
 	Sessions []analysis.SessionSummary
 	Local    []localLog // guide logs found in the PHD2 folder on this PC, newest first
 	PHD2Dir  string
+	Runs     []runRow // every analysis so far, newest first
 }
 
 // localLog is a guide log in the PHD2 folder, offered so the file dialog
@@ -40,8 +42,8 @@ type localLog struct {
 }
 
 // localLogs lists PHD2_GuideLog_*.txt in the PHD2 folder, newest first.
-func (s *Server) localLogs() []localLog {
-	entries, err := os.ReadDir(s.opt.PHD2Dir)
+func (s *Server) localLogs(ctx context.Context) []localLog {
+	entries, err := os.ReadDir(s.phd2Dir(ctx))
 	if err != nil {
 		return nil
 	}
@@ -63,10 +65,11 @@ func (s *Server) localLogs() []localLog {
 	if len(files) > 20 {
 		files = files[:20]
 	}
-	today := time.Now().In(s.opt.Loc).Format("2006-01-02")
+	loc := s.loc(ctx)
+	today := time.Now().In(loc).Format("2006-01-02")
 	out := make([]localLog, len(files))
 	for i, x := range files {
-		mod := x.mod.In(s.opt.Loc)
+		mod := x.mod.In(loc)
 		out[i] = localLog{Name: x.name, Size: fmt.Sprintf("%.0f KB", float64(x.size)/1024), When: mod.Format("2006-01-02 15:04"), Today: mod.Format("2006-01-02") == today}
 	}
 	return out
@@ -77,27 +80,33 @@ func isGuideLogName(n string) bool {
 	return strings.HasPrefix(n, "PHD2_GuideLog_") && strings.HasSuffix(n, ".txt") && n == filepath.Base(n)
 }
 
-func (s *Server) analyseView() analyseView {
-	return analyseView{Params: analysis.DefaultParams(), Local: s.localLogs(), PHD2Dir: s.opt.PHD2Dir}
+// analyseView is the Runs page: the pickers plus every run so far.
+func (s *Server) analyseView(ctx context.Context) analyseView {
+	v := analyseView{Params: analysis.DefaultParams(), Local: s.localLogs(ctx), PHD2Dir: s.phd2Dir(ctx)}
+	if rows, err := s.runRows(ctx, 200); err == nil {
+		v.Runs = rows
+	}
+	return v
 }
 
 func (s *Server) analysePage(w http.ResponseWriter, r *http.Request) {
-	s.page(w, r, "analyse", "", pageData{Title: "Analyse a guide log", Nav: "analyse", Data: s.analyseView()})
+	s.page(w, r, "analyse", "", pageData{Title: "Runs", Nav: "analyse", Data: s.analyseView(r.Context())})
 }
 
 // analyseLocal takes a guide log straight from the PHD2 folder: it is
 // copied into the data directory by content hash exactly as an upload is.
 func (s *Server) analyseLocal(w http.ResponseWriter, r *http.Request) {
-	base := pageData{Title: "Analyse a guide log", Nav: "analyse", Data: s.analyseView()}
+	base := pageData{Title: "Runs", Nav: "analyse", Data: s.analyseView(r.Context())}
 	_ = r.ParseForm()
 	name := r.FormValue("name")
 	if !isGuideLogName(name) {
 		s.problem(w, r, "analyse", base, "pick a guide log from the list")
 		return
 	}
-	data, err := os.ReadFile(filepath.Join(s.opt.PHD2Dir, name))
+	dir := s.phd2Dir(r.Context())
+	data, err := os.ReadFile(filepath.Join(dir, name))
 	if err != nil {
-		s.problem(w, r, "analyse", base, "could not read "+name+" from "+s.opt.PHD2Dir)
+		s.problem(w, r, "analyse", base, "could not read "+name+" from "+dir)
 		return
 	}
 	sha, err := s.storeBytes(r, data, "phd2", name)
@@ -124,25 +133,25 @@ func (s *Server) storeBytes(r *http.Request, data []byte, kind, name string) (st
 
 // analyseSessions parses a stored log and renders the session picker.
 func (s *Server) analyseSessions(w http.ResponseWriter, r *http.Request, sha, name string) {
-	base := pageData{Title: "Analyse a guide log", Nav: "analyse", Data: s.analyseView()}
-	l, err := phd2.ParseFile(s.filePath(sha), s.opt.Loc)
+	base := pageData{Title: "Runs", Nav: "analyse", Data: s.analyseView(r.Context())}
+	l, err := phd2.ParseFile(s.filePath(sha), s.loc(r.Context()))
 	if err != nil {
 		s.problem(w, r, "analyse", base, "not a PHD2 guide log: "+err.Error())
 		return
 	}
-	v := s.analyseView()
+	v := s.analyseView(r.Context())
 	v.FileSHA, v.FileName, v.Sessions = sha, name, analysis.Summaries(l)
 	if len(v.Sessions) == 0 {
 		s.problem(w, r, "analyse", base, "the log contains no guiding sessions")
 		return
 	}
-	s.page(w, r, "analyse", "analyse/_sessions", pageData{Title: "Analyse a guide log", Nav: "analyse", Data: v})
+	s.page(w, r, "analyse", "analyse/_sessions", pageData{Title: "Runs", Nav: "analyse", Data: v})
 }
 
 func (s *Server) analyseUpload(w http.ResponseWriter, r *http.Request) {
 	sha, name, err := s.saveUpload(r, "log", "phd2")
 	if err != nil {
-		s.problem(w, r, "analyse", pageData{Title: "Analyse a guide log", Nav: "analyse", Data: s.analyseView()}, err.Error())
+		s.problem(w, r, "analyse", pageData{Title: "Runs", Nav: "analyse", Data: s.analyseView(r.Context())}, err.Error())
 		return
 	}
 	s.analyseSessions(w, r, sha, name)
@@ -166,7 +175,7 @@ func (s *Server) analyseRun(w http.ResponseWriter, r *http.Request) {
 		s.problem(w, r, "analyse", base, err.Error())
 		return
 	}
-	l, err := phd2.ParseFile(s.filePath(sha), s.opt.Loc)
+	l, err := phd2.ParseFile(s.filePath(sha), s.loc(r.Context()))
 	if err != nil {
 		s.problem(w, r, "analyse", base, err.Error())
 		return
@@ -243,12 +252,12 @@ type tableView struct {
 }
 
 func (s *Server) tablePage(w http.ResponseWriter, r *http.Request) {
-	s.page(w, r, "table", "", pageData{Title: "Analyse a TCS table", Nav: "table",
+	s.page(w, r, "table", "", pageData{Title: "Analyse a TCS table", Nav: "fit",
 		Data: tableView{Harmonics: 6, ArcsecPerTick: s.opt.TCS.ArcsecPerTick}})
 }
 
 func (s *Server) tableRun(w http.ResponseWriter, r *http.Request) {
-	base := pageData{Nav: "table", Data: tableView{Harmonics: 6, ArcsecPerTick: s.opt.TCS.ArcsecPerTick}}
+	base := pageData{Nav: "fit", Data: tableView{Harmonics: 6, ArcsecPerTick: s.opt.TCS.ArcsecPerTick}}
 	sha, name, err := s.saveUpload(r, "table", "tcs")
 	if err != nil {
 		s.problem(w, r, "table", base, err.Error())

@@ -1,0 +1,51 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>Start</h1>
+<p class="lede">pec measures the periodic error of the mount from PHD2 guide logs and writes a corrected
+table for the Bisque TCS. Work down the list; the nav is the same list. Nothing here ever touches the
+mount: the table is pasted by hand.</p>
+
+{{with .Data}}
+<div class="cards modes" id="mode-cards">
+  <button type="button" class="card link mode" data-mode="check">
+    <h2>Check my PEC</h2>
+    <p>How good is the table in the mount right now? Needs steps 1, 2, 4 and 5 only: point, run the
+    Guiding Assistant with PEC on (and off, for a before-and-after), analyse, verify. Nothing is applied.</p>
+  </button>
+  <button type="button" class="card link mode" data-mode="table">
+    <h2>Fit a new table</h2>
+    <p>All six steps. A USB capture during the runs gives the worm period and the index phase, and
+    Fit writes the paste-ready table.</p>
+  </button>
+</div>
+
+<ol class="steps" id="steps">
+  {{range .Steps}}
+  <li class="{{if .Done}}done{{end}}{{if .Next}} next{{end}}{{if not .Check}} table-only{{end}}" data-check="{{.Check}}">
+    <a href="{{.Href}}"><span class="n">{{.N}}</span> {{.Name}}</a>
+    <span class="status">{{.Status}}</span>
+    <span class="status skip">not needed for a check</span>
+  </li>
+  {{end}}
+</ol>
+<p class="next"><b>Next:</b> <a href="{{.NextHref}}">{{.NextText}}</a></p>
+{{end}}
+
+<script>
+(() => {
+  const key = "pec.mode";
+  let mode = "table";
+  try { mode = localStorage.getItem(key) || "table"; } catch (e) {}
+  const paint = () => {
+    document.body.dataset.mode = mode;
+    for (const b of document.querySelectorAll("#mode-cards .mode")) b.classList.toggle("selected", b.dataset.mode === mode);
+  };
+  for (const b of document.querySelectorAll("#mode-cards .mode")) b.addEventListener("click", () => {
+    mode = b.dataset.mode;
+    try { localStorage.setItem(key, mode); } catch (e) {}
+    paint();
+  });
+  paint();
+})();
+</script>
+{{end}}

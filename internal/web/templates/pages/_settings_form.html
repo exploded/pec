@@ -1,0 +1,33 @@
+{{define "settings/_form"}}{{with .Data}}
+<form id="settings-form" class="card" hx-post="/settings" hx-target="#settings-form" hx-swap="outerHTML"
+      hx-status:422="target:#settings-error swap:innerHTML">
+  <h2>Folders</h2>
+  <div class="grid">
+    <label class="wide">PHD2 guide-log folder
+      <input type="text" name="phd2_dir" value="{{.PHD2Dir}}" placeholder="{{.DefaultPHD2Dir}}">
+      <span class="small">{{if .PHD2Found}}found{{else}}not found on this PC{{end}} · the Runs page lists the logs in it</span>
+    </label>
+    <label class="wide">NINA profiles folder
+      <input type="text" name="nina_dir" value="{{.NINADir}}" placeholder="{{.DefaultNINADir}}">
+      <span class="small">{{if .NINAFound}}found{{else}}not found on this PC{{end}} · "Read from NINA" on the Point page reads the site from the newest profile here</span>
+    </label>
+  </div>
+
+  <h2>Time and place</h2>
+  <div class="grid">
+    <label>Time zone of the PHD2 logs
+      <input type="text" name="tz" value="{{.TZ}}" placeholder="Local">
+      <span class="small">using {{.Zone}} · an IANA name such as Australia/Melbourne, or empty for this PC's zone</span>
+    </label>
+    <label>Latitude (south negative) <input type="number" name="lat" value="{{.Lat}}" step="any" min="-90" max="90" placeholder="-37.8136"></label>
+    <label>Longitude (west negative) <input type="number" name="lon" value="{{.Lon}}" step="any" min="-180" max="180" placeholder="144.9631"></label>
+  </div>
+  <p class="small">The site can also be typed or read from NINA on the Point page; both places share it.</p>
+
+  <div class="row">
+    <button type="submit" hx-disable="this">Save settings</button>
+    {{if .Saved}}<span class="small">Saved.</span>{{end}}
+    <div id="settings-error" class="slot inline"></div>
+  </div>
+</form>
+{{end}}{{end}}

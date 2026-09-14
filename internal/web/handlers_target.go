@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -12,11 +11,6 @@ import (
 )
 
 // --- Target: where to point for a PEC run ----------------------------------
-
-const (
-	settingLat = "site.lat"
-	settingLon = "site.lon"
-)
 
 type targetRow struct {
 	sky.Candidate
@@ -52,22 +46,18 @@ func (s *Server) targetSite(r *http.Request) (v targetView, site sky.Site, ok bo
 	v.Lat = strings.TrimSpace(r.FormValue("lat"))
 	v.Lon = strings.TrimSpace(r.FormValue("lon"))
 	v.At = strings.TrimSpace(r.FormValue("at"))
-	v.NINADir = s.opt.NINADir
+	v.NINADir = s.ninaDir(ctx)
 	if v.Lat == "" && v.Lon == "" {
 		v.Lat, v.Lon = s.st.Setting(ctx, settingLat), s.st.Setting(ctx, settingLon)
 	}
 	if v.Lat == "" && v.Lon == "" {
 		return v, site, false, nil
 	}
-	lat, err1 := strconv.ParseFloat(v.Lat, 64)
-	lon, err2 := strconv.ParseFloat(v.Lon, 64)
-	switch {
-	case err1 != nil || lat < -90 || lat > 90:
-		return v, site, false, fmt.Errorf("latitude must be a number from -90 to 90 (south negative)")
-	case err2 != nil || lon < -180 || lon > 180:
-		return v, site, false, fmt.Errorf("longitude must be a number from -180 to 180 (west negative)")
+	site, err = parseSite(v.Lat, v.Lon)
+	if err != nil {
+		return v, site, false, err
 	}
-	return v, sky.Site{LatDeg: lat, LonDeg: lon}, true, nil
+	return v, site, true, nil
 }
 
 func (s *Server) targetData(r *http.Request) (targetView, error) {
@@ -80,7 +70,7 @@ func (s *Server) targetData(r *http.Request) (targetView, error) {
 	at := time.Now()
 	v.Live = true
 	if v.At != "" {
-		t, err := parseLocal(v.At, s.opt.Loc)
+		t, err := parseLocal(v.At, s.loc(r.Context()))
 		if err != nil {
 			return v, fmt.Errorf("the time must look like 2026-09-12T21:00 (local time)")
 		}
@@ -89,7 +79,7 @@ func (s *Server) targetData(r *http.Request) (targetView, error) {
 	w := sky.DefaultWindow()
 	p := sky.PlanAt(at, site, w)
 	v.Plan, v.Window = &p, w
-	v.AtText = at.In(s.opt.Loc).Format("Mon 2 Jan 15:04:05 MST")
+	v.AtText = at.In(s.loc(r.Context())).Format("Mon 2 Jan 15:04:05 MST")
 	v.LSTText = sky.FormatRA(p.LST)
 	v.IdealText = fmt.Sprintf("RA %s, Dec 0", sky.FormatRA(p.IdealRA))
 	if p.Moon.AltDeg > 0 {
@@ -165,12 +155,7 @@ func (s *Server) targetSave(w http.ResponseWriter, r *http.Request) {
 		s.problem(w, r, "target", d, "enter the site latitude and longitude, or read them from NINA")
 		return
 	}
-	ctx := r.Context()
-	if err := s.st.SetSetting(ctx, settingLat, strconv.FormatFloat(site.LatDeg, 'f', -1, 64)); err != nil {
-		s.fail(w, err)
-		return
-	}
-	if err := s.st.SetSetting(ctx, settingLon, strconv.FormatFloat(site.LonDeg, 'f', -1, 64)); err != nil {
+	if err := s.saveSite(r.Context(), site); err != nil {
 		s.fail(w, err)
 		return
 	}
@@ -180,17 +165,12 @@ func (s *Server) targetSave(w http.ResponseWriter, r *http.Request) {
 // targetNINA reads the site from the newest NINA profile, remembers it and
 // reloads the page so the form shows the values.
 func (s *Server) targetNINA(w http.ResponseWriter, r *http.Request) {
-	site, name, err := sky.NINASite(s.opt.NINADir)
+	site, name, err := sky.NINASite(s.ninaDir(r.Context()))
 	if err != nil {
 		s.problem(w, r, "target", pageData{Nav: "target"}, "could not read the site from NINA: "+err.Error())
 		return
 	}
-	ctx := r.Context()
-	if err := s.st.SetSetting(ctx, settingLat, strconv.FormatFloat(site.LatDeg, 'f', -1, 64)); err != nil {
-		s.fail(w, err)
-		return
-	}
-	if err := s.st.SetSetting(ctx, settingLon, strconv.FormatFloat(site.LonDeg, 'f', -1, 64)); err != nil {
+	if err := s.saveSite(r.Context(), site); err != nil {
 		s.fail(w, err)
 		return
 	}

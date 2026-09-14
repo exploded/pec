@@ -137,7 +137,9 @@ func arc(v float64) string  { return fmt.Sprintf("%.2f″", v) }
 func arc3(v float64) string { return fmt.Sprintf("%.3f″", v) }
 
 // BuildAnalyse describes a fitted guide-log session.
-func BuildAnalyse(res *analysis.SessionResult, cfg tcs.Config, sourceName string) ReportData {
+// pecOn says what the mount was doing (nil = unknown); it changes the
+// headline from "error to correct" to "error remaining".
+func BuildAnalyse(res *analysis.SessionResult, cfg tcs.Config, sourceName string, pecOn *bool) ReportData {
 	f := res.Fit
 	s := res.Session
 	d := ReportData{
@@ -162,9 +164,19 @@ func BuildAnalyse(res *analysis.SessionResult, cfg tcs.Config, sourceName string
 		periodTxt = fmt.Sprintf("%.1f ± %.1f s", f.Period, f.PeriodSigma)
 	}
 	h1 := f.Curve.Fundamental()
+	headline := fmt.Sprintf("Periodic error %.2f″ peak-to-peak at %s", f.PeakToPeak, periodTxt)
+	switch {
+	case pecOn != nil && *pecOn:
+		headline = fmt.Sprintf("With PEC on, %.2f″ RMS of periodic error remains against %.2f″ of seeing", f.ModelRMS, f.ResidualRMS)
+		if f.ModelRMS < 0.5*f.ResidualRMS {
+			headline += ": the table is doing its job"
+		}
+	case pecOn != nil:
+		headline = fmt.Sprintf("With PEC off, %.2f″ RMS of periodic error to correct (%.2f″ peak-to-peak at %s)", f.ModelRMS, f.PeakToPeak, periodTxt)
+	}
 	d.Verdict = Verdict{
 		Level:    level,
-		Headline: fmt.Sprintf("Periodic error %.2f″ peak-to-peak at %s", f.PeakToPeak, periodTxt),
+		Headline: headline,
 		Detail: fmt.Sprintf("The fundamental is %.2f″ (%.1f ticks). An ideal correction would take the RMS from %.2f″ down to %.2f″; the rest is seeing and drift that no PEC table can remove. Drift %.2f″/min.",
 			h1.Amp, h1.Amp/cfg.ArcsecPerTick, f.DetrendedRMS, f.ResidualRMS, f.Drift),
 	}

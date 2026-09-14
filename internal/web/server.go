@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/exploded/pec/internal/report"
@@ -53,6 +54,10 @@ type Server struct {
 	log    *slog.Logger
 	st     *store.Store
 	assets string // hash of the embedded static files, appended to asset URLs
+
+	tzMu   sync.Mutex // cache for loc(): LoadLocation once per distinct setting
+	tzName string
+	tzLoc  *time.Location
 }
 
 // assetTag hashes every embedded static file and the report stylesheet so
@@ -109,7 +114,9 @@ func (s *Server) Handler() http.Handler {
 		w.Header().Set("Cache-Control", "no-cache")
 		_, _ = io.WriteString(w, report.CSS())
 	})
-	mux.HandleFunc("GET /{$}", s.index)
+	mux.HandleFunc("GET /{$}", s.startPage)
+	mux.HandleFunc("GET /settings", s.settingsPage)
+	mux.HandleFunc("POST /settings", s.settingsSave)
 	mux.HandleFunc("GET /analyse", s.analysePage)
 	mux.HandleFunc("POST /analyse/upload", s.analyseUpload)
 	mux.HandleFunc("POST /analyse/local", s.analyseLocal)
@@ -134,7 +141,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /fits/{id}/delete", s.fitDelete)
 	mux.HandleFunc("POST /fits/{id}/notes", s.fitNotes)
 	mux.HandleFunc("GET /tonight", func(w http.ResponseWriter, r *http.Request) {
-		s.page(w, r, "tonight", "", pageData{Title: "Tonight", Nav: "tonight"})
+		s.page(w, r, "tonight", "", pageData{Title: "Record", Nav: "tonight"})
 	})
 	mux.HandleFunc("GET /target", s.targetPage)
 	mux.HandleFunc("POST /target", s.targetSave)
