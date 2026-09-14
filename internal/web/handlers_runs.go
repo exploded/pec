@@ -12,7 +12,6 @@ import (
 
 	"github.com/exploded/pec/internal/analysis"
 	"github.com/exploded/pec/internal/pe"
-	"github.com/exploded/pec/internal/phd2"
 	"github.com/exploded/pec/internal/report"
 	"github.com/exploded/pec/internal/store"
 	"github.com/exploded/pec/internal/store/db"
@@ -97,7 +96,7 @@ func (s *Server) refitSession(ctx context.Context, run db.Run, override func(*an
 	if override != nil {
 		override(&p)
 	}
-	l, err := phd2.ParseFile(s.filePath(run.FileSha256), s.loc(ctx))
+	l, err := s.loadLog(ctx, run.FileSha256)
 	if err != nil {
 		return nil, fmt.Errorf("the stored log file is missing or unreadable: %w", err)
 	}

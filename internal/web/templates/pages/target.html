@@ -2,9 +2,10 @@
 {{define "content"}}
 <h1>Where to point</h1>
 <p class="lede">A PEC run wants a field near the celestial equator, one to two hours east of the meridian, so the
-mount stays on one pier side for an hour without a flip. TheSkyX's Find box only takes names, so this page
-names a bright star that is in that window right now. Type the name into Find, press Slew, then in PHD2
-pick any guide star in the field (not the bright one if it saturates).</p>
+mount stays on one pier side for an hour without a flip. This page names a bright star that is in that window
+right now. Slew to it with the button below (it goes through NINA, after a confirmation, and is the only mount
+command pec ever sends), or type the name into TheSkyX's Find box and press Slew there. Then in PHD2 pick any
+guide star in the field (not the bright one if it saturates).</p>
 
 {{with .Data}}
 <form id="site-form" class="card" hx-post="/target" hx-target="#target-result" hx-swap="innerHTML"
@@ -31,4 +32,32 @@ pick any guide star in the field (not the bright one if it saturates).</p>
   {{template "target/_result" $}}
 </div>
 {{end}}
+
+<dialog id="slew-dialog">
+  <form hx-post="/target/slew" hx-target="#target-result" hx-swap="innerHTML"
+        hx-status:422="target:#slew-error swap:innerHTML"
+        hx-on::before:request="document.getElementById('slew-error').innerHTML=''">
+    <h2>Slew the mount to <span id="slew-star"></span></h2>
+    <p class="warn-text"><b>The mount will move.</b> Go on only if the roof is open, the mount is homed and tracking,
+      and nothing is between the telescope and the sky. pec checks the mount, roof and safety devices NINA has
+      connected before it sends anything, but it cannot see what NINA cannot. This is the one mount command pec
+      sends; the slew takes a minute or two and this dialog waits for it.</p>
+    <input type="hidden" name="star" id="slew-star-input">
+    <label class="check"><input type="checkbox" name="confirm" required> The roof is open and the mount is clear to move</label>
+    <div class="row">
+      <button type="submit" class="danger" hx-disable="this">Slew now</button>
+      <button type="button" class="small-btn" onclick="document.getElementById('slew-dialog').close()">Cancel</button>
+      <div id="slew-error" class="slot inline"></div>
+    </div>
+  </form>
+</dialog>
+<script>
+function pecOpenSlew(name) {
+  document.getElementById("slew-star").textContent = name;
+  document.getElementById("slew-star-input").value = name;
+  document.getElementById("slew-error").innerHTML = "";
+  document.getElementById("slew-dialog").showModal();
+}
+document.body.addEventListener("slewDone", () => document.getElementById("slew-dialog").close());
+</script>
 {{end}}

@@ -95,6 +95,9 @@ func TestTonightPage(t *testing.T) {
 	if resp.StatusCode != 200 || !strings.Contains(body, "ProTrack off") || strings.Count(body, "data-step=") != 19 {
 		t.Fatalf("tonight: %d", resp.StatusCode)
 	}
+	if !strings.Contains(body, `hx-trigger="every 5s"`) || !strings.Contains(body, "live feed is off") || !strings.Contains(body, "Advanced API is not set up") {
+		t.Errorf("tonight without connections: %s", body)
+	}
 }
 
 func TestTargetNINA(t *testing.T) {

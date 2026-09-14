@@ -37,6 +37,9 @@ type targetView struct {
 	Later     []targetRow // past or never usable, collapsed
 	Live      bool        // refresh every minute
 	NINADir   string
+	Mount     *mountStatus // the mount as NINA reports it; nil without a site
+	Slew      *slewResult  // the slew just made, on the reply to it
+	CanSlew   bool         // a pick and a ready mount
 }
 
 // targetSite reads the site from the form or query, falling back to the
@@ -122,6 +125,8 @@ func (s *Server) targetData(r *http.Request) (targetView, error) {
 			}
 		}
 	}
+	v.Mount = s.mountStatus(r.Context(), ninaStatusBudget, v.Pick)
+	v.CanSlew = v.Pick != nil && v.Mount.Ready
 	return v, nil
 }
 

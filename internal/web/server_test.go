@@ -31,6 +31,7 @@ func newTestServer(t *testing.T) *httptest.Server {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { s.Close() })
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close)
 	return ts
@@ -88,7 +89,7 @@ func get(t *testing.T, ts *httptest.Server, path string) (*http.Response, string
 
 func TestPagesRender(t *testing.T) {
 	ts := newTestServer(t)
-	for _, p := range []string{"/", "/analyse", "/table", "/verify", "/anchor", "/fit", "/capture", "/target", "/tonight", "/settings", "/report.css", "/static/css/app.css", "/static/js/htmx.min.js"} {
+	for _, p := range []string{"/", "/analyse", "/table", "/verify", "/anchor", "/fit", "/capture", "/target", "/tonight", "/tonight/live", "/settings", "/report.css", "/static/css/app.css", "/static/js/htmx.min.js"} {
 		resp, _ := get(t, ts, p)
 		if resp.StatusCode != 200 {
 			t.Errorf("%s: status %d", p, resp.StatusCode)

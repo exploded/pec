@@ -1,9 +1,9 @@
 {{template "base" .}}
 {{define "content"}}
 <h1>Start</h1>
-<p class="lede">pec measures the periodic error of the mount from PHD2 guide logs and writes a corrected
-table for the Bisque TCS. Work down the list; the nav is the same list. Nothing here ever touches the
-mount: the table is pasted by hand.</p>
+<p class="lede">pec measures the periodic error of a Paramount ME from PHD2 Guiding Assistant runs, recorded live from
+PHD2 (or read from its log files). It can also fit a new PEC table to load into the mount, using a Wireshark
+capture of the mount link to sync the curve to the worm. Work through steps 1 to 6.</p>
 
 {{with .Data}}
 <div class="cards modes" id="mode-cards">

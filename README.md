@@ -4,8 +4,9 @@ Measures the periodic error of a German equatorial mount from PHD2 guide logs, f
 harmonic correction curve, and compares it with the PEC table stored in the Bisque TCS.
 Built for a Paramount ME (worm period about 150 s, 1250-entry table, 1 tick = 0.1125″).
 
-It is a local, offline tool with a browser UI. It reads files and writes files. It never
-talks to the mount.
+It is a local tool with a browser UI. It listens to PHD2, reads NINA, reads and writes files.
+The one mount command it sends is the slew on the Point page, through NINA, after you confirm
+it in a dialog; it never writes to the mount's PEC table.
 
 ## Run
 
@@ -18,8 +19,12 @@ pec.exe
 (`pec.db`) and uploaded files (`data\`) beside the executable, so copy the one file wherever you
 like and double-click it. Starting it a second time while it is running just opens the browser
 to the running copy. There are no options on the command line; the Settings page holds the PHD2
-guide-log folder, the NINA profiles folder, the time zone the logs were written in, and the
-site.
+server address, the NINA Advanced API address, the PHD2 guide-log folder, the NINA profiles
+folder, the time zone the logs were written in, and the site.
+
+It needs PHD2's server switched on (Tools, Enable Server) to record runs live, and NINA with the
+Advanced API plugin, connected to the mount, to slew and to read the equipment. Without either it
+still works from guide-log files, with the slew done by hand in TheSkyX.
 
 ## How it is used
 
@@ -27,17 +32,23 @@ The nav is the sequence. The Start page shows where you are in it and what to do
 you choose between checking the current PEC (steps 1, 2, 4, 5) and fitting a new table (all six).
 
 1. **Point**: enter the site once (or read it from NINA) and the page names a bright star near
-   the celestial equator one to two hours east of the meridian, to type into TheSkyX's Find box.
-2. **Record**: the night checklist. Mount tracking, PHD2 Guiding Assistant runs with PEC off and
-   on, and, for a new table, a passive USB capture (Wireshark with USBPcap) of the TheSkyX-to-mount
-   link with the TCS window on its Periodic Error Correction tab.
+   the celestial equator one to two hours east of the meridian. A button slews the mount to it
+   through NINA, after a confirmation that the roof is open and the mount is clear, and only when
+   NINA reports the mount tracking and unparked (and the roof open, if NINA has a roof device).
+   Or type the name into TheSkyX's Find box.
+2. **Record**: the night checklist, with a live card above it. pec records each PHD2 run as it
+   happens (frames, unguided minutes, a running period and amplitude), shows the mount, filter
+   and cooler through NINA with a Select L button, and when a run stops offers it to save as
+   PEC off or PEC on. For a new table, a passive USB capture (Wireshark with USBPcap) of the
+   TheSkyX-to-mount link runs alongside, with the TCS window on its Periodic Error Correction tab.
 3. **Capture**: upload the capture. pec decodes the MKS 4000 protocol, fits the HA encoder rate
    for the worm period to a few thousandths of a second, reads the PEC index TheSkyX polls for an
    anchor good to a tenth of a second, and, while Apply PEC was on, reads the correction the
    mount applied straight off the encoder and overlays it on the stored table. A typed index
    reading is the fallback.
-4. **Runs**: analyse a Guiding Assistant session: worm period, harmonic amplitudes and phases,
-   drift, and the RMS before and after removing the fitted curve, with charts. A run marked PEC
+4. **Runs**: analyse a Guiding Assistant session, recorded live or from a guide log: worm period,
+   harmonic amplitudes and phases, drift, and the RMS before and after removing the fitted curve,
+   with charts. A run marked PEC
    on reports how much periodic error is left; PEC off, how much there is to correct. The mount's
    own table, copied out of the TCS window, is analysed in the same units.
 5. **Verify**: pick a PEC-off run and a PEC-on run. The after run is re-fitted at the before

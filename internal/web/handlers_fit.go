@@ -413,7 +413,7 @@ func (s *Server) rebuildFit(ctx context.Context, f db.Fit) (*analysis.FitResult,
 		if m.Session == nil || m.PhaseRef.At == nil {
 			return nil, errors.New("stored meta lacks the session or anchor")
 		}
-		l, err := phd2.ParseFile(path, s.loc(ctx))
+		l, err := phd2.LoadFile(path, s.loc(ctx))
 		if err != nil {
 			return nil, fmt.Errorf("the stored log file is missing or unreadable: %w", err)
 		}

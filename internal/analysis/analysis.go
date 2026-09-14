@@ -203,7 +203,9 @@ func Summaries(l *phd2.Log) []SessionSummary {
 		switch {
 		case g.IsGA:
 			sm.Note = "Guiding Assistant run"
-		case g.DisabledAfter >= 0:
+		case g.Disabled && g.DisabledAfter < 0:
+			sm.Note = "guiding off from the start"
+		case g.Disabled:
 			sm.Note = fmt.Sprintf("guiding off after frame %d", g.DisabledAfter+1)
 		case g.Corrections > 0:
 			sm.Note = "guided"

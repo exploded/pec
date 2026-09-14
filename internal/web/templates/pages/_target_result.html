@@ -2,10 +2,16 @@
 {{if not .HasSite}}
 <div class="card muted"><p>Enter the site first. The star list depends on where you are and what time it is.</p></div>
 {{else}}
+{{if .Slew}}
+<div class="verdict {{if .Slew.OK}}good{{else}}warn{{end}}">
+  <p class="headline">{{.Slew.Text}}</p>
+  <p class="detail">Now in PHD2 pick a guide star in the field (not the bright one if it saturates), then go to Record.</p>
+</div>
+{{end}}
 {{if .Pick}}
 <div class="verdict good">
   <p class="headline">Slew to {{.Pick.Name}}</p>
-  <p class="detail">Find accepts <b>{{.Pick.Name}}</b>, <b>{{.Pick.Bayer}}</b> or <b>HIP {{.Pick.HIP}}</b>.
+  <p class="detail">Use the button below, or type <b>{{.Pick.Name}}</b>, <b>{{.Pick.Bayer}}</b> or <b>HIP {{.Pick.HIP}}</b> into TheSkyX's Find box.
     Hour angle {{.Pick.HAText}}, altitude {{.Pick.AltText}}°, Dec {{.Pick.DecText}}°, magnitude {{.Pick.MagText}}.
     Stays in the window for another {{.Pick.GoodFor.Minutes | f0}} min.</p>
 </div>
@@ -20,6 +26,38 @@
   <p class="headline">No listed star fits</p>
   <p class="detail">Use the chart: turn on the celestial equator and meridian lines and click any star near
     {{.IdealText}}.</p>
+</div>
+{{end}}
+
+{{with .Mount}}
+<div class="card" id="mount-status">
+  <h2>Mount, through NINA</h2>
+  {{if not .Configured}}
+  <p class="small">NINA's Advanced API is not set up. Enter its address under <a href="/settings">Settings</a> to see the mount here and slew from this page.</p>
+  {{else if not .Reachable}}
+  <p class="warn-text">{{.Err}}</p>
+  <p class="small">Start NINA with the Advanced API plugin, or check the address under <a href="/settings">Settings</a>. Until then, slew from TheSkyX.</p>
+  {{else}}
+  <div class="row between">
+    <div><div class="small">Mount</div><div class="mono">{{if .Connected}}{{.Name}}{{else}}not connected in NINA{{end}}</div></div>
+    <div><div class="small">Tracking</div><div class="mono">{{if .Tracking}}{{.TrackingMode}}{{else}}off{{end}}</div></div>
+    {{if .Connected}}<div><div class="small">Pointing ({{.Epoch}})</div><div class="mono">{{.RAText}} {{.DecText}}</div></div>{{end}}
+    {{if .SepText}}<div><div class="small">From the pick</div><div class="mono">{{.SepText}}</div></div>{{end}}
+    <div><div class="small">Roof</div><div class="mono">{{if .RoofKnown}}{{if .RoofOpen}}open{{else}}closed{{end}}{{else if .SafetyKnown}}{{if .Safe}}safe{{else}}unsafe{{end}}{{else}}not known to NINA{{end}}</div></div>
+  </div>
+  {{if and (not .RoofKnown) (not .SafetyKnown)}}
+  <p class="small warn-text">NINA has no roof or safety device connected, so pec cannot check the roof. Only you can.</p>
+  {{end}}
+  {{if .LastSlew}}<p class="small">Last slew from here: {{.LastSlew}}.</p>{{end}}
+  {{if $.Data.CanSlew}}
+  <div class="row">
+    <button type="button" class="danger" data-star="{{$.Data.Pick.Name}}" onclick="pecOpenSlew(this.dataset.star)">Slew the mount to {{$.Data.Pick.Name}}</button>
+    <span class="small">Opens a confirmation. Nothing moves until you confirm there.</span>
+  </div>
+  {{else if not .Ready}}
+  <p class="small">Not ready to slew: {{.Verdict}}.</p>
+  {{end}}
+  {{end}}
 </div>
 {{end}}
 

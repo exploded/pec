@@ -4,7 +4,7 @@
 -- live at <data>/files/<sha256>; runs are re-fitted from them on demand.
 CREATE TABLE IF NOT EXISTS files (
     sha256      TEXT PRIMARY KEY,
-    kind        TEXT NOT NULL,             -- 'phd2' | 'tcs'
+    kind        TEXT NOT NULL,             -- 'phd2' | 'phd2live' | 'tcs' | 'pcap'
     name        TEXT NOT NULL,
     size        INTEGER NOT NULL,
     uploaded_at TEXT NOT NULL              -- RFC3339

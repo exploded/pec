@@ -1,0 +1,85 @@
+{{define "tonight/_phd2"}}{{with .Data}}
+<div class="card" id="phd2-card">
+  <h2>PHD2, live</h2>
+  {{with .Live}}
+  {{if not .Configured}}
+  <p class="small">The live feed is off. Enter PHD2's server address under <a href="/settings">Settings</a>
+    (127.0.0.1:4400 when PHD2 runs on this PC) and pec records each run as it happens.</p>
+  {{else if not .Connected}}
+  <p class="warn-text">{{.Err}}{{if .Hint}}: {{.Hint}}{{end}}</p>
+  <p class="small">pec keeps trying every few seconds. A run made while it is not connected is still in the guide log; use <a href="/analyse">Runs</a>.</p>
+  {{else}}
+  <p class="small">Connected to PHD2 {{.Version}} at {{.Addr}} · {{.AppState}}{{if not .Recording}} · no run in progress: when the Guiding Assistant starts it appears here{{end}}</p>
+  {{with .Recording}}
+  <div class="row between">
+    <div><div class="small">Run started</div><div class="mono">{{.Since}}</div></div>
+    <div><div class="small">Elapsed</div><div class="mono">{{.Elapsed}}</div></div>
+    <div><div class="small">Frames</div><div class="mono">{{.Frames}}{{if .Drops}} ({{.Drops}} lost){{end}}</div></div>
+    <div><div class="small">Measuring</div><div class="mono">{{f1 .MeasuredMin}} min</div></div>
+    {{with .Fit}}{{if not .Err}}
+    <div><div class="small">Period so far</div><div class="mono">{{f2 .Period}} s</div></div>
+    <div><div class="small">Fundamental</div><div class="mono">{{f2 .Amp1}}″ over {{f1 .Cycles}} cycles</div></div>
+    {{end}}{{end}}
+  </div>
+  {{if .OutputOff}}
+  <p class="good-text">Guide output is off: a Guiding Assistant style measurement.{{if .EightAt}} Eight minutes of it at {{.EightAt}}.{{else}} Enough for a fit: stop whenever you like.{{end}}</p>
+  {{else if .OutputKnown}}
+  <p class="warn-text">PHD2 is sending corrections: this run is guiding, not a measurement. Stop it and use the Guiding Assistant.</p>
+  {{else}}
+  <p class="small">Waiting to hear whether guide output is on.</p>
+  {{end}}
+  {{if .MidRun}}<p class="small">pec joined this run after it started.</p>{{end}}
+  {{if .Position}}<p class="small">{{.Position}}</p>{{end}}
+  {{if .InfoErr}}<p class="small warn-text">PHD2 did not answer: {{.InfoErr}}</p>{{end}}
+  {{with .Fit}}{{if .Err}}<p class="small">Fit so far: {{.Err}}</p>{{end}}{{end}}
+  {{end}}
+  {{end}}
+  {{end}}
+
+  {{with .Equip}}
+  <h3>NINA</h3>
+  {{if not .Configured}}
+  <p class="small">NINA's Advanced API is not set up (<a href="/settings">Settings</a>).</p>
+  {{else if not .Reachable}}
+  <p class="small warn-text">{{.Err}}</p>
+  {{else}}
+  <div class="row between">
+    <div><div class="small">Mount</div><div class="mono{{if not .MountOK}} warn-text{{end}}">{{.Mount}}</div></div>
+    <div><div class="small">Filter</div><div class="mono{{if and .HasFilterWheel (not .FilterIsL)}} warn-text{{end}}">{{.Filter}}</div></div>
+    <div><div class="small">Camera</div><div class="mono">{{.Cooler}}</div></div>
+    {{if and .HasFilterWheel (not .FilterIsL)}}
+    <form hx-post="/tonight/filter" hx-target="#phd2-live" hx-swap="innerHTML" hx-status:422="target:#tonight-error swap:innerHTML" class="inline">
+      <button type="submit" class="small-btn" hx-disable="this">Select L filter</button>
+    </form>
+    {{end}}
+  </div>
+  {{end}}
+  {{end}}
+
+  {{if .Unsaved}}
+  <h3>Recorded runs waiting to be saved</h3>
+  {{range .Unsaved}}
+  <div class="row between live-file">
+    <div><b>{{.Name}}</b> <span class="small">· {{.Size}} · recorded {{.When}}</span></div>
+    <form hx-post="/analyse" hx-status:422="target:#tonight-error swap:innerHTML" class="inline">
+      <input type="hidden" name="file" value="{{.SHA}}"><input type="hidden" name="session" value="1">
+      <input type="hidden" name="name" value="{{.Name}}"><input type="hidden" name="pec_on" value="off">
+      <button type="submit" class="small-btn" hx-disable="this">Save as PEC off</button>
+    </form>
+    <form hx-post="/analyse" hx-status:422="target:#tonight-error swap:innerHTML" class="inline">
+      <input type="hidden" name="file" value="{{.SHA}}"><input type="hidden" name="session" value="1">
+      <input type="hidden" name="name" value="{{.Name}}"><input type="hidden" name="pec_on" value="on">
+      <button type="submit" class="small-btn" hx-disable="this">Save as PEC on</button>
+    </form>
+    <form hx-post="/tonight/discard" hx-target="#phd2-live" hx-swap="innerHTML" hx-confirm="Discard {{.Name}}? The recording is deleted."
+          hx-status:422="target:#tonight-error swap:innerHTML" class="inline">
+      <input type="hidden" name="file" value="{{.SHA}}">
+      <button type="submit" class="small-btn danger" hx-disable="this">Discard</button>
+    </form>
+  </div>
+  {{end}}
+  <p class="small">Saving runs the analysis with the default settings and opens the run page; the Runs page offers the settings.</p>
+  {{end}}
+  <div id="tonight-error" class="slot inline"></div>
+</div>
+{{end}}{{end}}

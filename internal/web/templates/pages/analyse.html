@@ -1,12 +1,27 @@
 {{template "base" .}}
 {{define "content"}}
 <h1>Runs</h1>
-<p class="lede">Analyse the Guiding Assistant sessions from a PHD2 guide log. Each session is listed with what
-PHD2 was doing; a Guiding Assistant run (no corrections sent) is the intended input. The result is saved
-as a run and opens on its own page: with PEC on it says how much periodic error is left, with PEC off how
-much there is to correct.</p>
+<p class="lede">Analyse a Guiding Assistant run: one pec recorded live from PHD2, or a session from a PHD2 guide
+log. Each session is listed with what PHD2 was doing; a Guiding Assistant run (no corrections sent) is the
+intended input. The result is saved as a run and opens on its own page: with PEC on it says how much periodic
+error is left, with PEC off how much there is to correct.</p>
 
 {{with .Data}}
+{{if .Live}}
+<form class="card" hx-post="/analyse/live" hx-target="#sessions" hx-swap="innerHTML"
+      hx-status:422="target:#live-error swap:innerHTML">
+  <div class="row">
+    <label>Run recorded live from PHD2
+      <select name="file">
+        {{range .Live}}<option value="{{.SHA}}">{{.Name}} · {{.Size}}{{if .Saved}} · saved{{end}}</option>{{end}}
+      </select>
+    </label>
+    <button type="submit" hx-disable="this">List sessions</button>
+  </div>
+  <p class="small">Newest first. The Record page offers each new recording to save as PEC off or on; this is the long way round, with the settings.</p>
+  <div id="live-error" class="slot"></div>
+</form>
+{{end}}
 <form class="card" hx-post="/analyse/local" hx-target="#sessions" hx-swap="innerHTML"
       hx-status:422="target:#local-error swap:innerHTML">
   {{if .Local}}

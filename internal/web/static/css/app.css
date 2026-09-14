@@ -137,3 +137,18 @@ p.next { font-size: 1.05rem; }
 #mode-toggle .mode { background: transparent; color: var(--text-secondary); border: 1px solid var(--border); }
 #mode-toggle .mode.selected { color: var(--text-primary); border-color: var(--series-1); }
 ol.checklist li[hidden] { display: none; }
+
+/* Slew confirmation */
+dialog { border: 1px solid var(--border); border-radius: 10px; background: var(--surface-1); color: var(--text-primary);
+         padding: 1.25rem 1.5rem; max-width: 34rem; }
+dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
+dialog h2 { margin-top: 0; }
+dialog form { margin: 0; }
+button.danger.solid, dialog button.danger { background: var(--critical); color: #fff; border: 0; }
+label.check { display: flex; gap: 0.5rem; align-items: center; margin: 0.75rem 0; }
+label.check input { width: auto; }
+
+/* Record: live card */
+.good-text { color: var(--good-text); }
+form.inline { display: inline-flex; gap: 0.4rem; margin: 0; align-items: center; }
+.live-file { border-top: 1px solid var(--grid); padding: 0.45rem 0; flex-wrap: wrap; gap: 0.5rem; }

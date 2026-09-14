@@ -3,7 +3,9 @@ package web
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -21,7 +23,35 @@ const (
 	settingPHD2Dir = "phd2.dir"
 	settingNINADir = "nina.dir"
 	settingTZ      = "tz"
+
+	settingPHD2Server = "phd2.server" // PHD2 event server host:port; "" = Options default
+	settingNINAAPI    = "nina.api"    // NINA Advanced API base URL; "" = Options default
+
+	// The last star the Point page slewed to, for the recorder's position
+	// when NINA cannot be asked.
+	settingTargetName = "target.name"
+	settingTargetRA   = "target.ra"  // hours, J2000
+	settingTargetDec  = "target.dec" // degrees, J2000
+	settingTargetAt   = "target.at"  // RFC3339
 )
+
+// phd2Server is where the live feed connects; "" means it is off.
+func (s *Server) phd2Server(ctx context.Context) string {
+	if v := strings.TrimSpace(s.st.Setting(ctx, settingPHD2Server)); v != "" {
+		return v
+	}
+	return s.opt.PHD2Server
+}
+
+// ninaAPI is the NINA Advanced API base URL without a trailing slash; ""
+// means NINA is not used.
+func (s *Server) ninaAPI(ctx context.Context) string {
+	v := strings.TrimSpace(s.st.Setting(ctx, settingNINAAPI))
+	if v == "" {
+		v = s.opt.NINAAPI
+	}
+	return strings.TrimRight(v, "/")
+}
 
 // phd2Dir is the folder the Runs page lists guide logs from.
 func (s *Server) phd2Dir(ctx context.Context) string {
@@ -90,6 +120,10 @@ type settingsView struct {
 	PHD2Found, NINAFound           bool   // the effective folder exists
 	Zone                           string // the effective zone name
 	Saved                          bool
+
+	PHD2Server, NINAAPI               string // stored values ("" = default)
+	DefaultPHD2Server, DefaultNINAAPI string
+	PHD2Status, NINAStatus            string // what each connection says right now
 }
 
 func (s *Server) settingsData(ctx context.Context) settingsView {
@@ -101,6 +135,28 @@ func (s *Server) settingsData(ctx context.Context) settingsView {
 	}
 	v.PHD2Found = dirExists(s.phd2Dir(ctx))
 	v.NINAFound = dirExists(s.ninaDir(ctx))
+	v.PHD2Server, v.NINAAPI = s.st.Setting(ctx, settingPHD2Server), s.st.Setting(ctx, settingNINAAPI)
+	v.DefaultPHD2Server, v.DefaultNINAAPI = s.opt.PHD2Server, s.opt.NINAAPI
+	switch st := s.live.State(); {
+	case st.Addr == "":
+		v.PHD2Status = "off"
+	case st.Connected:
+		v.PHD2Status = "connected to PHD2 " + st.Version
+	case st.Err != "":
+		v.PHD2Status = st.Err
+		if st.Hint != "" {
+			v.PHD2Status += ": " + st.Hint
+		}
+	default:
+		v.PHD2Status = "connecting"
+	}
+	if c := s.nina(ctx, ninaStatusBudget); c == nil {
+		v.NINAStatus = "off"
+	} else if ver, err := c.Version(ctx); err != nil {
+		v.NINAStatus = err.Error()
+	} else {
+		v.NINAStatus = "Advanced API " + ver
+	}
 	return v
 }
 
@@ -125,6 +181,24 @@ func (s *Server) settingsSave(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	phd2Server := strings.TrimSpace(r.FormValue("phd2_server"))
+	if phd2Server != "" {
+		if _, port, err := net.SplitHostPort(phd2Server); err != nil || port == "" {
+			s.problem(w, r, "settings", base, "PHD2 server must look like 127.0.0.1:4400 (host:port); leave it empty for the default")
+			return
+		} else if _, err := strconv.Atoi(port); err != nil {
+			s.problem(w, r, "settings", base, "PHD2 server must look like 127.0.0.1:4400 (host:port); leave it empty for the default")
+			return
+		}
+	}
+	ninaAPI := strings.TrimSpace(r.FormValue("nina_api"))
+	if ninaAPI != "" {
+		u, err := url.Parse(ninaAPI)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			s.problem(w, r, "settings", base, "NINA API must be a URL such as http://127.0.0.1:1888; leave it empty for the default")
+			return
+		}
+	}
 	lat, lon := strings.TrimSpace(r.FormValue("lat")), strings.TrimSpace(r.FormValue("lon"))
 	var site *sky.Site
 	if lat != "" || lon != "" {
@@ -136,9 +210,11 @@ func (s *Server) settingsSave(w http.ResponseWriter, r *http.Request) {
 		site = &st
 	}
 	for k, v := range map[string]string{
-		settingPHD2Dir: strings.TrimSpace(r.FormValue("phd2_dir")),
-		settingNINADir: strings.TrimSpace(r.FormValue("nina_dir")),
-		settingTZ:      tz,
+		settingPHD2Dir:    strings.TrimSpace(r.FormValue("phd2_dir")),
+		settingNINADir:    strings.TrimSpace(r.FormValue("nina_dir")),
+		settingTZ:         tz,
+		settingPHD2Server: phd2Server,
+		settingNINAAPI:    ninaAPI,
 	} {
 		if err := s.st.SetSetting(ctx, k, v); err != nil {
 			s.fail(w, err)
@@ -151,6 +227,7 @@ func (s *Server) settingsSave(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	s.live.SetAddr(s.phd2Server(ctx))
 	v := s.settingsData(ctx)
 	v.Saved = true
 	w.Header().Set("HX-Trigger", `{"showToast": {"msg": "Settings saved"}}`)

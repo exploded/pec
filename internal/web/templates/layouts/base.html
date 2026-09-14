@@ -15,7 +15,7 @@
     {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
     {{block "content" .}}{{end}}
   </main>
-  <footer>pec {{.Version}} · reads files, writes files, never touches the mount</footer>
+  <footer>pec {{.Version}} · listens to PHD2, reads and writes files; its one mount command is the slew on Point</footer>
   <div id="toast" aria-live="polite"></div>
   <script>
     document.body.addEventListener("showToast", e => {

@@ -129,3 +129,36 @@ func TestStartPage(t *testing.T) {
 		}
 	}
 }
+
+func TestSettingsLiveConnections(t *testing.T) {
+	ts := newTestServer(t)
+	_, page := get(t, ts, "/settings")
+	if !strings.Contains(page, "Live connections") || !strings.Contains(page, `name="phd2_server"`) || strings.Count(page, ">off ·") != 2 {
+		t.Fatalf("settings page: %s", page)
+	}
+	if resp, body := postForm(t, ts, "/settings", url.Values{"phd2_server": {"notaport"}}); resp.StatusCode != 422 || !strings.Contains(body, "PHD2 server") {
+		t.Errorf("bad phd2 server: %d %s", resp.StatusCode, body)
+	}
+	if resp, body := postForm(t, ts, "/settings", url.Values{"phd2_server": {"127.0.0.1:x"}}); resp.StatusCode != 422 || !strings.Contains(body, "PHD2 server") {
+		t.Errorf("bad phd2 port: %d %s", resp.StatusCode, body)
+	}
+	if resp, body := postForm(t, ts, "/settings", url.Values{"nina_api": {"ftp://x"}}); resp.StatusCode != 422 || !strings.Contains(body, "NINA API") {
+		t.Errorf("bad nina api: %d %s", resp.StatusCode, body)
+	}
+	if resp, _ := postForm(t, ts, "/settings", url.Values{"phd2_server": {"127.0.0.1:1"}, "nina_api": {"http://127.0.0.1:1/"}}); resp.StatusCode != 200 {
+		t.Errorf("save: %d", resp.StatusCode)
+	}
+	_, page = get(t, ts, "/settings")
+	if !strings.Contains(page, `value="127.0.0.1:1"`) || !strings.Contains(page, `value="http://127.0.0.1:1/"`) || strings.Contains(page, ">off ·") {
+		t.Errorf("saved connections not shown: %s", page)
+	}
+	if _, start := get(t, ts, "/"); !strings.Contains(start, "PHD2 feed") {
+		t.Errorf("start page lacks the feed state: %s", start)
+	}
+	if resp, _ := postForm(t, ts, "/settings", url.Values{"phd2_server": {""}, "nina_api": {""}}); resp.StatusCode != 200 {
+		t.Errorf("clear: %d", resp.StatusCode)
+	}
+	if _, page = get(t, ts, "/settings"); strings.Count(page, ">off ·") != 2 {
+		t.Errorf("clear did not turn the connections off: %s", page)
+	}
+}

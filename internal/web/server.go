@@ -5,6 +5,7 @@ package web
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
@@ -21,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/exploded/pec/internal/phd2live"
 	"github.com/exploded/pec/internal/report"
 	"github.com/exploded/pec/internal/sky"
 	"github.com/exploded/pec/internal/store"
@@ -45,6 +47,12 @@ type Options struct {
 	Store   *store.Store
 	PHD2Dir string // PHD2 guide-log folder offered on the Analyse page; default Documents/PHD2
 	NINADir string // NINA profile directory for the Target page; default from the environment
+	// PHD2Server is the PHD2 event server to record runs from (host:port);
+	// "" leaves the live feed off. NINAAPI is the NINA Advanced API base URL;
+	// "" leaves NINA out. The exe sets both defaults; tests leave them blank
+	// so nothing is dialled. Settings override both per request.
+	PHD2Server string
+	NINAAPI    string
 }
 
 // Server holds parsed templates and the request handlers.
@@ -58,6 +66,8 @@ type Server struct {
 	tzMu   sync.Mutex // cache for loc(): LoadLocation once per distinct setting
 	tzName string
 	tzLoc  *time.Location
+
+	live *phd2live.Client // the PHD2 recorder; runs for the life of the server
 }
 
 // assetTag hashes every embedded static file and the report stylesheet so
@@ -101,7 +111,19 @@ func New(opt Options, logger *slog.Logger) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Server{opt: opt, pages: pages, log: logger, st: opt.Store, assets: assetTag()}, nil
+	s := &Server{opt: opt, pages: pages, log: logger, st: opt.Store, assets: assetTag()}
+	s.live = phd2live.New(phd2live.Options{
+		LiveDir: filepath.Join(opt.DataDir, "live"), FilesDir: filepath.Join(opt.DataDir, "files"),
+		Position: s.livePosition, Finished: s.liveFinished, Logger: logger,
+	})
+	s.live.SetAddr(s.phd2Server(context.Background()))
+	s.live.Start()
+	return s, nil
+}
+
+// Close stops the PHD2 recorder, filing any run in progress.
+func (s *Server) Close() error {
+	return s.live.Close()
 }
 
 // Handler builds the router.
@@ -120,6 +142,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /analyse", s.analysePage)
 	mux.HandleFunc("POST /analyse/upload", s.analyseUpload)
 	mux.HandleFunc("POST /analyse/local", s.analyseLocal)
+	mux.HandleFunc("POST /analyse/live", s.analyseLive)
 	mux.HandleFunc("POST /analyse", s.analyseRun)
 	mux.HandleFunc("GET /table", s.tablePage)
 	mux.HandleFunc("POST /table", s.tableRun)
@@ -140,12 +163,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /fits/{id}/pec_table.meta.json", s.fitMetaDownload)
 	mux.HandleFunc("POST /fits/{id}/delete", s.fitDelete)
 	mux.HandleFunc("POST /fits/{id}/notes", s.fitNotes)
-	mux.HandleFunc("GET /tonight", func(w http.ResponseWriter, r *http.Request) {
-		s.page(w, r, "tonight", "", pageData{Title: "Record", Nav: "tonight"})
-	})
+	mux.HandleFunc("GET /tonight", s.tonightPage)
+	mux.HandleFunc("GET /tonight/live", s.tonightLive)
+	mux.HandleFunc("POST /tonight/filter", s.tonightFilter)
+	mux.HandleFunc("POST /tonight/discard", s.tonightDiscard)
 	mux.HandleFunc("GET /target", s.targetPage)
 	mux.HandleFunc("POST /target", s.targetSave)
 	mux.HandleFunc("POST /target/nina", s.targetNINA)
+	mux.HandleFunc("POST /target/slew", s.targetSlew)
 	mux.HandleFunc("GET /capture", s.capturePage)
 	mux.HandleFunc("POST /capture", s.captureUpload)
 	mux.HandleFunc("POST /capture/save", s.captureSave)

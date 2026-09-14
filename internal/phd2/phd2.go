@@ -47,6 +47,11 @@ type Session struct {
 	Header  map[string]string // every "k = v" pair in the header block, first wins
 	Samples []Sample          // valid rows only; DROP rows become EventDrop
 	Events  []Event
+
+	// Live marks a session recorded from PHD2's event server rather than
+	// parsed from a guide log. The stream carries no "GA Result" lines, so
+	// guide output being off is the whole evidence of a Guiding Assistant run.
+	Live bool
 }
 
 // Sample is one guide frame.
@@ -243,11 +248,12 @@ func (s *Session) Duration() time.Duration {
 
 // GuidingState describes whether PHD2 was sending corrections.
 type GuidingState struct {
-	DisabledAfter  int     // Samples index after which "MountGuidingEnabled = false" appeared; -1 never
+	Disabled       bool    // "MountGuidingEnabled = false" was seen at some point
+	DisabledAfter  int     // Samples index after which it appeared; -1 when it preceded the first sample (or never, if !Disabled)
 	ReenabledAfter int     // index after which it went back to true; -1 never
 	Corrections    int     // samples with a non-zero RA duration
 	FracZeroRA     float64 // fraction of samples with RADuration == 0
-	IsGA           bool    // guiding was disabled and a GA Result was logged
+	IsGA           bool    // guide output was off and a GA Result was logged (or the session is Live)
 }
 
 // Guiding inspects the events and samples.
@@ -258,9 +264,10 @@ func (s *Session) Guiding() GuidingState {
 		switch e.Kind {
 		case EventParamChange:
 			if e.Key == "MountGuidingEnabled" {
-				if e.Value == "false" && g.DisabledAfter < 0 {
+				if e.Value == "false" && !g.Disabled {
+					g.Disabled = true
 					g.DisabledAfter = e.After
-				} else if e.Value == "true" && g.DisabledAfter >= 0 && g.ReenabledAfter < 0 {
+				} else if e.Value == "true" && g.Disabled && g.ReenabledAfter < 0 {
 					g.ReenabledAfter = e.After
 				}
 			}
@@ -268,7 +275,7 @@ func (s *Session) Guiding() GuidingState {
 			ga = true
 		}
 	}
-	g.IsGA = g.DisabledAfter >= 0 && ga
+	g.IsGA = g.Disabled && (ga || s.Live)
 	zero := 0
 	for _, smp := range s.Samples {
 		if smp.RADuration != 0 {
@@ -291,7 +298,7 @@ func (s *Session) Guiding() GuidingState {
 func (s *Session) MeasurementSamples() (rows []Sample, warnings []string) {
 	g := s.Guiding()
 	rows = s.Samples
-	if g.DisabledAfter >= 0 {
+	if g.Disabled {
 		end := len(s.Samples)
 		if g.ReenabledAfter > g.DisabledAfter {
 			end = g.ReenabledAfter + 1

@@ -28,6 +28,7 @@ type analyseView struct {
 	FileName string
 	Sessions []analysis.SessionSummary
 	Local    []localLog // guide logs found in the PHD2 folder on this PC, newest first
+	Live     []liveFile // runs recorded from PHD2's event server, newest first
 	PHD2Dir  string
 	Runs     []runRow // every analysis so far, newest first
 }
@@ -82,7 +83,7 @@ func isGuideLogName(n string) bool {
 
 // analyseView is the Runs page: the pickers plus every run so far.
 func (s *Server) analyseView(ctx context.Context) analyseView {
-	v := analyseView{Params: analysis.DefaultParams(), Local: s.localLogs(ctx), PHD2Dir: s.phd2Dir(ctx)}
+	v := analyseView{Params: analysis.DefaultParams(), Local: s.localLogs(ctx), Live: s.liveFiles(ctx, 20), PHD2Dir: s.phd2Dir(ctx)}
 	if rows, err := s.runRows(ctx, 200); err == nil {
 		v.Runs = rows
 	}
@@ -117,6 +118,12 @@ func (s *Server) analyseLocal(w http.ResponseWriter, r *http.Request) {
 	s.analyseSessions(w, r, sha, name)
 }
 
+// loadLog parses a stored guide log or live recording; the two are told
+// apart by their first byte.
+func (s *Server) loadLog(ctx context.Context, sha string) (*phd2.Log, error) {
+	return phd2.LoadFile(s.filePath(sha), s.loc(ctx))
+}
+
 // storeBytes files a document by content hash, like saveUpload does for a
 // browser upload.
 func (s *Server) storeBytes(r *http.Request, data []byte, kind, name string) (string, error) {
@@ -134,9 +141,9 @@ func (s *Server) storeBytes(r *http.Request, data []byte, kind, name string) (st
 // analyseSessions parses a stored log and renders the session picker.
 func (s *Server) analyseSessions(w http.ResponseWriter, r *http.Request, sha, name string) {
 	base := pageData{Title: "Runs", Nav: "analyse", Data: s.analyseView(r.Context())}
-	l, err := phd2.ParseFile(s.filePath(sha), s.loc(r.Context()))
+	l, err := s.loadLog(r.Context(), sha)
 	if err != nil {
-		s.problem(w, r, "analyse", base, "not a PHD2 guide log: "+err.Error())
+		s.problem(w, r, "analyse", base, "not a PHD2 guide log or recording: "+err.Error())
 		return
 	}
 	v := s.analyseView(r.Context())
@@ -175,7 +182,7 @@ func (s *Server) analyseRun(w http.ResponseWriter, r *http.Request) {
 		s.problem(w, r, "analyse", base, err.Error())
 		return
 	}
-	l, err := phd2.ParseFile(s.filePath(sha), s.loc(r.Context()))
+	l, err := s.loadLog(r.Context(), sha)
 	if err != nil {
 		s.problem(w, r, "analyse", base, err.Error())
 		return

@@ -13,11 +13,23 @@
     </label>
   </div>
 
+  <h2>Live connections</h2>
+  <div class="grid">
+    <label class="wide">PHD2 server (host:port)
+      <input type="text" name="phd2_server" value="{{.PHD2Server}}" placeholder="{{.DefaultPHD2Server}}">
+      <span class="small">{{.PHD2Status}} · PHD2, Tools, Enable Server; pec records each run from it. Empty for the default.</span>
+    </label>
+    <label class="wide">NINA Advanced API (URL)
+      <input type="text" name="nina_api" value="{{.NINAAPI}}" placeholder="{{.DefaultNINAAPI}}">
+      <span class="small">{{.NINAStatus}} · the Advanced API plugin in NINA; the Point page slews through it and Record reads the equipment. Empty for the default.</span>
+    </label>
+  </div>
+
   <h2>Time and place</h2>
   <div class="grid">
     <label>Time zone of the PHD2 logs
       <input type="text" name="tz" value="{{.TZ}}" placeholder="Local">
-      <span class="small">using {{.Zone}} · an IANA name such as Australia/Melbourne, or empty for this PC's zone</span>
+      <span class="small">using {{.Zone}} · an IANA name such as Australia/Melbourne, or empty for this PC's zone. Runs recorded live carry their own time; this is for guide-log files.</span>
     </label>
     <label>Latitude (south negative) <input type="number" name="lat" value="{{.Lat}}" step="any" min="-90" max="90" placeholder="-37.8136"></label>
     <label>Longitude (west negative) <input type="number" name="lon" value="{{.Lon}}" step="any" min="-180" max="180" placeholder="144.9631"></label>

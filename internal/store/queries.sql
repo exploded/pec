@@ -103,3 +103,23 @@ SELECT value FROM settings WHERE key = ?;
 -- name: SetSetting :exec
 INSERT INTO settings (key, value) VALUES (?, ?)
 ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+
+-- name: ListLiveFiles :many
+SELECT f.*, (SELECT COUNT(*) FROM runs r WHERE r.file_sha256 = f.sha256) AS run_count
+FROM files f
+WHERE f.kind = 'phd2live'
+ORDER BY f.uploaded_at DESC, f.sha256
+LIMIT ?;
+
+-- name: ListUnsavedLiveFiles :many
+SELECT * FROM files f
+WHERE f.kind = 'phd2live'
+  AND NOT EXISTS (SELECT 1 FROM runs r WHERE r.file_sha256 = f.sha256)
+ORDER BY f.uploaded_at DESC, f.sha256
+LIMIT ?;
+
+-- name: DeleteUnreferencedFile :execresult
+DELETE FROM files
+WHERE sha256 = ? AND kind = 'phd2live'
+  AND NOT EXISTS (SELECT 1 FROM runs r WHERE r.file_sha256 = files.sha256)
+  AND NOT EXISTS (SELECT 1 FROM fits x WHERE x.file_sha256 = files.sha256);

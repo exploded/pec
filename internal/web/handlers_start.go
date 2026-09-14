@@ -46,13 +46,14 @@ func (s *Server) startData(ctx context.Context) (startView, error) {
 	site, haveSite, _ := s.siteSetting(ctx)
 	if haveSite {
 		steps[0].Done = true
-		steps[0].Status = fmt.Sprintf("site %.4f %s, %.4f %s; the page names a star to slew to", math.Abs(site.LatDeg), hemi(site.LatDeg, "N", "S"), math.Abs(site.LonDeg), hemi(site.LonDeg, "E", "W"))
+		steps[0].Status = fmt.Sprintf("site %.4f %s, %.4f %s; the page names a star and can slew the mount to it through NINA", math.Abs(site.LatDeg), hemi(site.LatDeg, "N", "S"), math.Abs(site.LonDeg), hemi(site.LonDeg, "E", "W"))
 	} else {
 		steps[0].Status = "not yet: set the site once, then the page names a star to slew to"
 	}
 
 	// 2 Record
-	steps[1].Status = "the night checklist: mount, PHD2 Guiding Assistant runs, and the USB capture if you are fitting a new table"
+	steps[1].Status = "the night checklist: mount, PHD2 Guiding Assistant runs, and the USB capture if you are fitting a new table; PHD2 feed " + s.liveFeedText()
+	unsaved := len(s.unsavedLive(ctx))
 
 	// 3 Capture
 	var haveAnchor bool
@@ -93,7 +94,7 @@ func (s *Server) startData(ctx context.Context) (startView, error) {
 	tables, _ := s.st.Q.ListTableRuns(ctx, 1)
 	switch {
 	case len(runs) == 0 && len(tables) == 0:
-		steps[3].Status = "not yet: analyse the Guiding Assistant sessions from the guide log"
+		steps[3].Status = "not yet: save the Guiding Assistant runs recorded on Record, or analyse a guide log"
 	default:
 		steps[3].Status = fmt.Sprintf("%d guide-log run%s: %d PEC off, %d PEC on, %d unmarked", len(runs), plural(len(runs)), off, on, unknown)
 		if len(tables) > 0 {
@@ -126,12 +127,14 @@ func (s *Server) startData(ctx context.Context) (startView, error) {
 	// What to do next.
 	next := 0
 	switch {
+	case unsaved > 0:
+		next, v.NextText, v.NextHref = 2, fmt.Sprintf("Save the recorded run%s on the Record page as PEC off or PEC on", plural(unsaved)), "/tonight"
 	case !haveSite:
 		next, v.NextText, v.NextHref = 1, "Set the site on the Point page", "/target"
 	case len(runs) == 0 && !haveAnchor:
 		next, v.NextText, v.NextHref = 2, "Record a night: Guiding Assistant runs with PEC off and on, with a USB capture if you want a new table", "/tonight"
 	case len(runs) == 0:
-		next, v.NextText, v.NextHref = 4, "Analyse the guide-log sessions on the Runs page", "/analyse"
+		next, v.NextText, v.NextHref = 4, "Analyse the guide-log sessions on the Runs page (runs recorded live appear on Record first)", "/analyse"
 	case fitID > 0:
 		v.NextText, v.NextHref = fmt.Sprintf("Review table #%d, then paste it into the TCS by hand and verify it with a new PEC-on run", fitID), fmt.Sprintf("/fits/%d", fitID)
 	case off > 0 && on > 0 && !haveAnchor:
@@ -164,6 +167,19 @@ func (s *Server) siteSetting(ctx context.Context) (sky.Site, bool, error) {
 		return sky.Site{}, false, err
 	}
 	return site, true, nil
+}
+
+// liveFeedText is the PHD2 connection in a few words.
+func (s *Server) liveFeedText() string {
+	st := s.live.State()
+	switch {
+	case st.Addr == "":
+		return "off (see Settings)"
+	case st.Connected:
+		return "connected to PHD2 " + st.Version
+	default:
+		return "not reachable (PHD2 not running, or Tools > Enable Server is off)"
+	}
 }
 
 func plural(n int) string {

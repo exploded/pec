@@ -46,6 +46,17 @@ func (q *Queries) DeleteRun(ctx context.Context, id int64) error {
 	return err
 }
 
+const deleteUnreferencedFile = `-- name: DeleteUnreferencedFile :execresult
+DELETE FROM files
+WHERE sha256 = ? AND kind = 'phd2live'
+  AND NOT EXISTS (SELECT 1 FROM runs r WHERE r.file_sha256 = files.sha256)
+  AND NOT EXISTS (SELECT 1 FROM fits x WHERE x.file_sha256 = files.sha256)
+`
+
+func (q *Queries) DeleteUnreferencedFile(ctx context.Context, sha256 string) (sql.Result, error) {
+	return q.db.ExecContext(ctx, deleteUnreferencedFile, sha256)
+}
+
 const getAnchor = `-- name: GetAnchor :one
 SELECT id, created_at, pec_index, at, sigma_s, source, period_s, period_sigma_s, readings, note FROM anchors WHERE id = ?
 `
@@ -657,6 +668,53 @@ func (q *Queries) ListFits(ctx context.Context, limit int64) ([]Fit, error) {
 	return items, nil
 }
 
+const listLiveFiles = `-- name: ListLiveFiles :many
+SELECT f.sha256, f.kind, f.name, f.size, f.uploaded_at, (SELECT COUNT(*) FROM runs r WHERE r.file_sha256 = f.sha256) AS run_count
+FROM files f
+WHERE f.kind = 'phd2live'
+ORDER BY f.uploaded_at DESC, f.sha256
+LIMIT ?
+`
+
+type ListLiveFilesRow struct {
+	Sha256     string `json:"sha256"`
+	Kind       string `json:"kind"`
+	Name       string `json:"name"`
+	Size       int64  `json:"size"`
+	UploadedAt string `json:"uploaded_at"`
+	RunCount   int64  `json:"run_count"`
+}
+
+func (q *Queries) ListLiveFiles(ctx context.Context, limit int64) ([]ListLiveFilesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listLiveFiles, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListLiveFilesRow{}
+	for rows.Next() {
+		var i ListLiveFilesRow
+		if err := rows.Scan(
+			&i.Sha256,
+			&i.Kind,
+			&i.Name,
+			&i.Size,
+			&i.UploadedAt,
+			&i.RunCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRuns = `-- name: ListRuns :many
 SELECT id, created_at, kind, file_sha256, source_name, session_index, session_begins, equipment, ra_hours, dec_deg, hour_angle, alt_deg, pier_side, pixel_scale, exposure_ms, sample_count, cadence_s, span_s, cycles, drift_arcsec_min, period_s, period_sigma_s, period_fixed, harmonics_json, amp1_arcsec, phase1_deg, periodic_rms, residual_rms, peak_to_peak, guiding_active, pec_on, ra_sign, options_json, warnings_json, tool_version, notes FROM runs ORDER BY created_at DESC, id DESC LIMIT ?
 `
@@ -771,6 +829,43 @@ func (q *Queries) ListTableRuns(ctx context.Context, limit int64) ([]Run, error)
 			&i.WarningsJson,
 			&i.ToolVersion,
 			&i.Notes,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUnsavedLiveFiles = `-- name: ListUnsavedLiveFiles :many
+SELECT sha256, kind, name, size, uploaded_at FROM files f
+WHERE f.kind = 'phd2live'
+  AND NOT EXISTS (SELECT 1 FROM runs r WHERE r.file_sha256 = f.sha256)
+ORDER BY f.uploaded_at DESC, f.sha256
+LIMIT ?
+`
+
+func (q *Queries) ListUnsavedLiveFiles(ctx context.Context, limit int64) ([]File, error) {
+	rows, err := q.db.QueryContext(ctx, listUnsavedLiveFiles, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []File{}
+	for rows.Next() {
+		var i File
+		if err := rows.Scan(
+			&i.Sha256,
+			&i.Kind,
+			&i.Name,
+			&i.Size,
+			&i.UploadedAt,
 		); err != nil {
 			return nil, err
 		}

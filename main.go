@@ -1,6 +1,7 @@
 // pec measures the periodic error of a telescope mount from PHD2 guide
 // logs, fits a correction curve, and writes a Bisque TCS PEC table to paste
-// in by hand. It never talks to the mount.
+// in by hand. It records PHD2 runs live from PHD2's event server. Its one
+// mount command is the Point page slew, through the NINA Advanced API.
 //
 // Run pec.exe (or double-click it): it serves http://127.0.0.1:8990/, keeps
 // pec.db and data\ beside the executable, and opens the browser. Running it
@@ -27,6 +28,8 @@ import (
 
 	_ "time/tzdata"
 
+	"github.com/exploded/pec/internal/nina"
+	"github.com/exploded/pec/internal/phd2live"
 	"github.com/exploded/pec/internal/store"
 	"github.com/exploded/pec/internal/web"
 )
@@ -77,7 +80,7 @@ func run(addr, dbPath, dataDir string) error {
 		return fmt.Errorf("database %s: %w", dbPath, err)
 	}
 	defer st.Close()
-	srv, err := web.New(web.Options{DataDir: dataDir, Version: version(), Store: st}, logger)
+	srv, err := web.New(web.Options{DataDir: dataDir, Version: version(), Store: st, PHD2Server: phd2live.DefaultAddr, NINAAPI: nina.DefaultBase}, logger)
 	if err != nil {
 		ln.Close()
 		return err
@@ -100,7 +103,11 @@ func run(addr, dbPath, dataDir string) error {
 	}
 	shctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	return hs.Shutdown(shctx)
+	err = hs.Shutdown(shctx)
+	if cerr := srv.Close(); err == nil {
+		err = cerr
+	}
+	return err
 }
 
 // pecAnswers reports whether a pec instance is serving at url.
